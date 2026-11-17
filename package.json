@@ -1,0 +1,26 @@
+{
+  "name": "dsc-inner-plugin",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "dsc 同源插件索引: 收录 omdsc-dev 组织自研插件",
+  "license": "Apache-2.0",
+  "homepage": "https://omdsc-dev.github.io/dsc-inner-plugin/index.json",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/omdsc-dev/dsc-inner-plugin.git"
+  },
+  "scripts": {
+    "build": "node build.mjs && node scripts/build-index.mjs",
+    "build:site": "node build.mjs",
+    "build:index": "node scripts/build-index.mjs",
+    "type": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
