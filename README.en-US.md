@@ -12,11 +12,11 @@ This repository does three things:
 - Serve a static site that shows the entries, the install steps and the download address.
 - Commit to listing only plugins that do not collect or leak user credentials and data.
 
-Division of work: `awesome-dsc-plugin` accepts community submissions, while this repository lists plugins built by omdsc-dev only. The index format is identical, so the dsce plugin market can consume either one.
+Division of work: `awesome-dsc-plugin` accepts community submissions, while this repository lists plugins built by omdsc-dev only. The index format is identical, so the DeepSeek-Chat-Enhanced plugin market can consume either one.
 
 ## Current index
 
-The plugins bundled with dsce (dsc-core, dsc-plugin-engine, dsc-market) ship with the product and never appear in this index. omdsc-dev has not published any installable in-house plugin yet, so `plugins/` only holds its README and the generated index is empty:
+The plugins bundled with DeepSeek-Chat-Enhanced (dsc-core, dsc-plugin-engine, dsc-market) ship with the product and never appear in this index. omdsc-dev has not published any installable in-house plugin yet, so `plugins/` only holds its README and the generated index is empty:
 
 ```json
 {
@@ -128,7 +128,7 @@ See [plugins/README.md](plugins/README.md) for details.
 
 ## Install
 
-1. Open the plugin panel from the dsce sidebar.
+1. Open the plugin panel from the DeepSeek-Chat-Enhanced sidebar.
 2. Paste the plugin download URL into the "Install from URL" box at the bottom of the panel.
 3. Click Install, and the plugin activates right away.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 生成 dsce 插件市场可直接消费的插件索引。
+ * 生成 DeepSeek-Chat-Enhanced 插件市场可直接消费的插件索引。
  *
  * 输入: plugins/*.json
  * 输出: dist/index.json 与 dist/plugins/*.json

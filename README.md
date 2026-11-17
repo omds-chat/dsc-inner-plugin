@@ -12,11 +12,11 @@ omdsc-dev 组织自研 dsc 插件的索引与分发入口,与社区合集 [aweso
 - 为收录的插件提供静态站点,展示条目、安装方法与分发地址。
 - 承诺收录的插件不采集、不外传用户凭证与数据。
 
-与社区合集的分工: `awesome-dsc-plugin` 面向社区投稿,本仓库只收录 omdsc-dev 组织自研的插件。索引格式与它完全一致,dsce 的插件市场可以直接消费两者中的任意一个。
+与社区合集的分工: `awesome-dsc-plugin` 面向社区投稿,本仓库只收录 omdsc-dev 组织自研的插件。索引格式与它完全一致,DeepSeek-Chat-Enhanced 的插件市场可以直接消费两者中的任意一个。
 
 ## 当前索引
 
-组织主线 dsce 的内置插件(dsc-core、dsc-plugin-engine、dsc-market)随产品分发,不作为可安装插件出现在本索引中。组织尚未发布可安装的同源插件,因此 `plugins/` 目录只有说明文件,生成的索引为空:
+组织主线 DeepSeek-Chat-Enhanced 的内置插件(dsc-core、dsc-plugin-engine、dsc-market)随产品分发,不作为可安装插件出现在本索引中。组织尚未发布可安装的同源插件,因此 `plugins/` 目录只有说明文件,生成的索引为空:
 
 ```json
 {
@@ -60,7 +60,7 @@ omdsc-dev 组织自研 dsc 插件的索引与分发入口,与社区合集 [aweso
 | `plugins[].author` | string | 是 | 作者或组织名,非空 |
 | `plugins[].homepage` | string | 是 | http 或 https 地址 |
 | `plugins[].download` | string | 是 | https 分发地址,或本仓库相对路径 |
-| `plugins[].manifest` | object | 否 | 插件清单,省略时由 dsce 使用产物导出的清单 |
+| `plugins[].manifest` | object | 否 | 插件清单,省略时由 DeepSeek-Chat-Enhanced 使用产物导出的清单 |
 
 ## 目录结构
 
@@ -132,7 +132,7 @@ npx serve dist
 
 ## 安装方法
 
-1. 在 dsce 侧边栏打开插件面板。
+1. 在 DeepSeek-Chat-Enhanced 的侧边栏打开插件面板。
 2. 在面板底部的「从地址安装」输入框中粘贴插件的下载地址。
 3. 点击「安装」,插件随即自动启用。
 
