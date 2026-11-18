@@ -1,0 +1,111 @@
+name: build-and-deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'plugins/**'
+      - 'scripts/**'
+      - '.github/**'
+      - 'meta.json'
+  release:
+    types:
+      - published
+  workflow_dispatch:
+
+# 需要写权限,因为分发内容会被提交回仓库;Pages 与 OIDC 令牌供发布步骤使用。
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+# 密钥只从 secrets 读取,仓库内不存放任何私钥。
+# dsc 私钥不在本流程中出现: 信任签名由 dsc 侧离线生成后提交到 plugin_set_sign.json。
+env:
+  PLUGIN_PRIVATE_KEY: ${{ secrets.PLUGIN_PRIVATE_KEY }}
+  DSC_PUBLIC_KEY: ${{ secrets.DSC_PUBLIC_KEY }}
+
+jobs:
+  build:
+    name: Build distribution
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.11.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 单项失败只跳过该插件,不影响其余插件,本步骤退出码保持 0。
+      - name: Import plugins from sources
+        run: node .github/scripts/import-plugins.mjs --manifest .github/plugins-sources.json
+
+      # 公钥总是以私钥推导结果为准,覆盖仓库内的占位公钥。
+      - name: Derive collection public key
+        if: ${{ env.PLUGIN_PRIVATE_KEY != '' }}
+        run: node scripts/sign.mjs derive-public-key "$PLUGIN_PRIVATE_KEY" > plugin_secret.pub
+
+      # 为每个版本的 meta.json 与 plugin.js 签名,合并时保留作者自签名,并产出 dist/。
+      - name: Build and sign distribution
+        run: node scripts/build-collection.mjs --dir . --sign --out dist
+
+      # 配置了 dsc 公钥则严格校验信任签名;未配置时按骨架模式放行并给出警告。
+      - name: Verify collection
+        run: |
+          if [ -n "$DSC_PUBLIC_KEY" ]; then
+            node scripts/verify-collection.mjs --dir .
+          else
+            echo "::warning::DSC_PUBLIC_KEY 未配置,合集信任签名按骨架模式放行"
+            node scripts/verify-collection.mjs --dir . --allow-empty-trust-sign
+          fi
+
+      # 把构建结果提交回仓库,让开发者本地也能拿到最新的分发内容。
+      - name: Commit distribution changes
+        run: |
+          git config user.name 'github-actions'
+          git config user.email 'github-actions@github.com'
+          git add plugins plugin_secret.pub datalog.json
+          if git diff --cached --quiet; then
+            echo 'distribution content unchanged'
+            exit 0
+          fi
+          git commit -m 'chore(dist): refresh plugin distribution content'
+          git push
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

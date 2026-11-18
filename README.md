@@ -1,159 +1,182 @@
-# dsc 同源插件
+# dsc-inner-plugin
+
+omdsc-dev 组织自研的 dsc 插件合集。插件在这里按分发规范 v2 收录、签名并分发,插件市场读取本合集的清单与公钥来取用插件。
 
 [English](README.en-US.md)
 
-omdsc-dev 组织自研 dsc 插件的索引与分发入口,与社区合集 [awesome-dsc-plugin](https://github.com/omdsc-dev/awesome-dsc-plugin) 是兄弟仓库。
-
 ## 定位
 
-本仓库只做三件事:
+本仓库是一个插件合集,不是索引服务,也不提供静态站点页面: 分发内容就是合集本身,构建产物 `dist/` 直接部署到 GitHub Pages。
 
-- 维护同源插件索引 `index.json`,记录每个收录插件的标识、名称、版本、说明、作者、主页与分发地址。
-- 为收录的插件提供静态站点,展示条目、安装方法与分发地址。
-- 承诺收录的插件不采集、不外传用户凭证与数据。
+- 与社区合集 [awesome-dsc-plugin](https://github.com/omdsc-dev/awesome-dsc-plugin) 是兄弟仓库。两者目录结构、校验脚本与签名体系完全一致,区别只在收录范围与预设标签。
+- 社区合集面向公开投稿;本合集只收录 omdsc-dev 组织自研的插件,不接受外部投稿。
+- 本合集对插件的签名者标识为 `dsc-inner-plugin`。签名者标识不同,签名不能互相顶替;但两个合集都通过同一套 dsc 信任签名体系取得信任。
+- 收录不等于认证。本合集只保证分发内容与签名一致,不审查插件行为。
 
-与社区合集的分工: `awesome-dsc-plugin` 面向社区投稿,本仓库只收录 omdsc-dev 组织自研的插件。索引格式与它完全一致,DeepSeek-Chat-Enhanced 的插件市场可以直接消费两者中的任意一个。
+## 当前状态
 
-## 当前索引
+组织尚未发布可安装的同源插件,因此本合集为空合集,不含任何插件条目:
 
-组织主线 DeepSeek-Chat-Enhanced 的内置插件(dsc-core、dsc-plugin-engine、dsc-market)随产品分发,不作为可安装插件出现在本索引中。组织尚未发布可安装的同源插件,因此 `plugins/` 目录只有说明文件,生成的索引为空:
+| 文件 | 内容 |
+|:---:|:---:|
+| `datalog.json` | `[]` |
+| `plugins/author_manifest.json` | `[]` |
+| `plugin_set_sign.json` | `{ "sign": [] }` |
+| `plugin_secret.pub` | 占位公钥,由 CI 用 `PLUGIN_PRIVATE_KEY` 推导后覆盖 |
 
-```json
-{
-  "schemaVersion": 1,
-  "plugins": []
-}
-```
+空合集下 `pnpm verify` 与 `pnpm build` 均通过,信任签名为空只给出警告。本仓库不编造插件条目。
 
-站点在该索引下显示空态说明,不展示任何虚构条目。
+## 收录条件
 
-## 索引格式
+只有同时满足以下条件的插件才会被收录:
 
-```json
-{
-  "schemaVersion": 1,
-  "plugins": [
-    {
-      "id": "dsc-example",
-      "name": "示例插件",
-      "version": "0.1.0",
-      "description": "一句话说明",
-      "author": "omdsc-dev",
-      "homepage": "https://github.com/omdsc-dev/dsc-inner-plugin",
-      "download": "https://omdsc-dev.github.io/dsc-inner-plugin/plugins/dsc-example.js",
-      "manifest": {}
-    }
-  ]
-}
-```
+- 由 omdsc-dev 组织自研并维护,不接受第三方投稿。
+- 承诺不采集、不外传用户凭证与数据,不隐式发起网络请求,不读取与插件功能无关的会话内容。
+- 产物是单个浏览器 ESM 脚本,导出 `activate(context)`,不依赖 Node 内置模块与后端接口。
+- 提供可构建的源码仓库,`pnpm build` 能在 CI 中复核产物。
+- 运行时元数据 `meta.json` 字段完整,插件名符合 `dsc-xxx` 或 `@scope/dsc-xxx`。
+- 维护者愿意回应使用者的问题。
 
-上面的片段只说明格式,不构成收录条目。
-
-| 字段 | 类型 | 必填 | 说明 |
-|:---:|:---:|:---:|:---:|
-| `schemaVersion` | number | 是 | 固定为 1 |
-| `plugins` | array | 是 | 条目数组,按 `id` 字典序排列 |
-| `plugins[].id` | string | 是 | 插件标识,匹配 `^[a-z][a-z0-9-]{2,63}$` |
-| `plugins[].name` | string | 是 | 展示名称,非空 |
-| `plugins[].version` | string | 是 | 三段数字,形如 `0.1.0` |
-| `plugins[].description` | string | 是 | 一句话说明,非空 |
-| `plugins[].author` | string | 是 | 作者或组织名,非空 |
-| `plugins[].homepage` | string | 是 | http 或 https 地址 |
-| `plugins[].download` | string | 是 | https 分发地址,或本仓库相对路径 |
-| `plugins[].manifest` | object | 否 | 插件清单,省略时由 DeepSeek-Chat-Enhanced 使用产物导出的清单 |
+不收录需要后端服务、需要原生模块、或无法在 CI 中重建产物的插件。
 
 ## 目录结构
+
+分发规范 v2 的高耦合结构: 清单数据、公钥、签名与插件本体全部归属同站,避免跨域来源注入。
 
 ```text
 dsc-inner-plugin/
 ├── .github/
-│   └── workflows/
-│       └── deploy.yml
+│   ├── plugins-sources.json            收录来源清单,改这里就是改收录结果
+│   ├── plugins-sources.README.md       清单字段说明
+│   ├── scripts/import-plugins.mjs      按清单构建并收录插件
+│   └── workflows/build-and-deploy.yml  校验、签名、提交分发内容并发布
+├── .gitattributes                      统一 LF 换行
 ├── .gitignore
 ├── LICENSE
 ├── README.md
 ├── README.en-US.md
-├── build.mjs
+├── meta.json                           合集元数据,含下载计数开关
+├── plugin_secret.pub                   合集公钥,由 CI 用私钥推导后覆盖
+├── plugin_set_sign.json                dsc 对本合集的信任签名
+├── datalog.json                        插件目录,以插件名称为唯一键
+├── tags.json                           预设标签
 ├── package.json
+├── pnpm-lock.yaml
 ├── pnpm-workspace.yaml
 ├── plugins/
-│   └── README.md
-├── scripts/
-│   └── build-index.mjs
-├── tsconfig.json
-└── src/
-    ├── index.html
-    ├── main.ts
-    ├── styles.css
-    └── i18n.ts
+│   ├── author_manifest.json            登记的作者清单
+│   └── <author>/
+│       ├── plugin_secret.pub           该作者的公钥
+│       ├── plugin_manifest.json        该作者的插件清单
+│       └── <plugin>/
+│           ├── versions.json           版本列表
+│           └── <x.y.z>/
+│               ├── meta.json           插件运行时元数据
+│               ├── plugin.js           插件运行时脚本
+│               └── plugin_sign.json    合集签名与作者自签名
+└── scripts/
+    ├── sign.mjs                        Ed25519 hash-then-sign 签名工具
+    ├── lib/collection-verify.mjs       两个脚本共用的校验逻辑
+    ├── build-collection.mjs            校验、签名并生成 dist/
+    └── verify-collection.mjs           只读自洽性校验
 ```
 
-## 构建
+目录命名与必需文件见 [plugins/README.md](plugins/README.md)。
+
+## 合集元数据
+
+根目录 `meta.json` 只声明下载计数的开关:
+
+| 字段 | 当前值 | 说明 |
+|:---:|:---:|:---:|
+| `DOWNLOAD_COUNT_ENABLE` | `false` | 为 `true` 时插件市场每次下载都会向计数接口发送一次不等待回复的 POST 请求,并提示用户该来源启用了计数 |
+| `DOWNLOAD_COUNT_API` | 缺省 | 计数接口地址,仅在启用计数时需要 |
+| `API_NEED_IP` | `false` | 计数请求是否携带请求来源的公网 IP |
+
+本合集当前不启用下载计数。
+
+## 信任链
+
+三层签名,每层只签下一层需要的东西。
+
+| 层 | 签名者 | 私钥 | 被签名对象 | 产物 |
+|:---:|:---:|:---:|:---:|:---:|
+| dsc | `dsc` | dsc 私钥,不在本仓库 | 根目录 `plugin_secret.pub` 的字节 | `plugin_set_sign.json` |
+| 合集 | `dsc-inner-plugin` | `PLUGIN_PRIVATE_KEY` | 每个版本的 `meta.json` 与 `plugin.js` | 版本目录内 `plugin_sign.json` |
+| 作者 | 作者名 | `AUTHOR_SIGN_PRIVATE_KEY` | 同上,可选 | 追加进同一个 `plugin_sign.json` |
+
+- 插件市场内置 dsc 公钥。校验顺序是: 先验 `plugin_set_sign.json`,通过后才信任本合集的 `plugin_secret.pub`,再用它验插件签名。
+- 不支持下级派生。本合集不能为其他合集签发信任签名。
+- 算法固定 Ed25519,采用 hash-then-sign: 先对文件字节做 SHA-512 摘要,再对摘要字节签名,签名以 base64 编码。
+- 合集签名与作者自签名并存于同一个 `plugin_sign.json`,靠 `signer` 字段区分。校验时作者签名用 `plugins/<author>/plugin_secret.pub`,合集签名用根目录 `plugin_secret.pub`。
+- 公钥总是以私钥推导结果为准。CI 用 `PLUGIN_PRIVATE_KEY` 推导后覆盖 `plugin_secret.pub`,推导结果与仓库内公钥不一致时构建直接失败。
+
+## 收录流程
+
+1. 提交 PR 修改 `.github/plugins-sources.json`,每个插件一项,写明 `repo`、可选的 `ref`、`author` 与 `plugin`。字段见 [plugins-sources.README.md](.github/plugins-sources.README.md)。
+2. 合并后 CI 依次执行: 克隆或复制源码到 `temp/`、`pnpm install --frozen-lockfile`、`pnpm build`、把 `dist/meta.json` 与 `dist/plugin.js` 写入 `plugins/<author>/<plugin>/<version>/`、更新该插件的 `versions.json`、该作者的 `plugin_manifest.json` 与根目录 `datalog.json`。作者自签名若随产物提供会一并保留。
+3. 人工补充标签。新条目在 `datalog.json` 里的 `tag` 初始为空数组,需要从 `tags.json` 的预设标签中挑选后提交。未在 `tags.json` 中声明的标签会被校验拒绝。
+4. 合并并分发。CI 用 `PLUGIN_PRIVATE_KEY` 为每个版本的 `meta.json` 与 `plugin.js` 签名,合并保留作者自签名,再把 `plugins/`、`plugin_secret.pub` 与 `datalog.json` 的变更提交回仓库,同时把 `dist/` 发布到 Pages。
+
+任何一步失败只跳过该插件并在日志里写明原因,其余插件照常处理。
+
+## 预设标签
+
+`tags.json` 是本合集的标签表,取组织自研视角,与社区合集的预设标签不同:
+
+| 标签 | 含义 |
+|:---:|:---:|
+| `core` | 与 dsc 本体协同的基础能力 |
+| `ui` | 界面与交互增强 |
+| `market` | 插件市场与分发相关 |
+| `tooling` | 开发、调试与构建工具 |
+
+标签必须从 `tags.json` 中取,未声明的标签会被校验拒绝。
+
+## 插件市场如何消费本合集
+
+市场先读合集元数据与插件目录,再按路径取各版本文件。同一个来源通常配置多个 `base_url`,依次是自动同步的 CDN 分发服务、`raw.githubusercontent.com`、GitHub Pages,后两者做兜底,单次请求最多等待 1 秒。
+
+| 步骤 | 路径 | 用途 |
+|:---:|:---:|:---:|
+| 1 | `<base_url>/meta.json` | 判断该来源是否启用下载计数 |
+| 2 | `<base_url>/datalog.json` | 列出全部插件、作者与标签 |
+| 3 | `<base_url>/plugins/<author>/<plugin>/versions.json` | 取版本列表与最新版本号 |
+| 4 | `<base_url>/plugins/<author>/<plugin>/<x.y.z>/meta.json` | 取插件元数据 |
+| 5 | `<base_url>/plugins/<author>/<plugin>/<x.y.z>/plugin.js` | 取插件运行时脚本 |
+| 6 | `<base_url>/plugins/<author>/<plugin>/<x.y.z>/plugin_sign.json` | 取该版本文件的签名 |
+| 7 | `<base_url>/plugin_set_sign.json` 与 `<base_url>/plugin_secret.pub` | 校验该来源可信,并取得合集公钥 |
+
+市场把来源类型、脚本地址、公钥与签名一并存入 IndexedDB。本合集的来源类型记为 `inner`;`source_url` 存插件脚本地址;`pub` 与 `sign` 存取插件时拿到的公钥与签名,每次预运行插件前重新校验,防止篡改。
+
+## 跨域访问
+
+本合集托管在 GitHub Pages。Pages 对静态资源默认返回 `Access-Control-Allow-Origin: *`,因此上表中三个 `base_url` 天然可以被跨域读取,无法在托管侧把来源收窄到白名单。这是托管平台的既定行为,不是本仓库的配置。
+
+规范要求跨域来源仅开放信任的来源,至少包含 `https://omdsc-dev.github.io`。若把分发内容改放到其他托管,需要自行配置 CORS 白名单,至少放行该来源。
+
+## 本地校验
 
 ```bash
 pnpm install
-pnpm run type
-pnpm run build
+pnpm verify        # 只读自洽性校验,信任签名为空时给出警告
+pnpm build         # 校验通过后生成 dist/
+pnpm run import    # 按来源清单收录插件
 ```
 
-`pnpm run build` 由两个脚本串联组成,执行顺序不可颠倒:
+- `pnpm verify` 与 `pnpm build` 在合集尚无 dsc 信任签名时按骨架模式放行并警告。配置了 dsc 公钥后可运行 `pnpm verify:strict` 做严格校验,公钥可用环境变量 `DSC_PUBLIC_KEY` 或参数 `--trust-public-key` 提供。
+- 收录请用 `pnpm run import`。`pnpm import` 是 pnpm 自带命令,不是本仓库的收录脚本。
+- 需要给插件签名时运行 `pnpm sign`,它会用 `PLUGIN_PRIVATE_KEY` 签名并生成 `dist/`。
 
-1. `node build.mjs`: 清空 `dist/`,用 esbuild 打包 `src/main.ts` 到 `dist/assets/main.js`,复制样式与页面,写入 `dist/.nojekyll`。
-2. `node scripts/build-index.mjs`: 校验 `plugins/*.json`,写出 `dist/index.json` 与 `dist/plugins/*.json`。
+## 安全提示
 
-站点构建必须在前,因为它会清空整个 `dist/`。索引生成只清理自己产出的 `dist/index.json` 与 `dist/plugins/*.json`,不会动站点产物,所以放在后面。
-
-单独执行:
-
-```bash
-pnpm run build:site   # 只构建站点
-pnpm run build:index  # 只生成索引
-pnpm run type         # 类型检查
-```
-
-## 本地预览
-
-```bash
-pnpm run build
-npx serve dist
-```
-
-打开输出的地址即可看到站点。站点读取同目录下的 `./index.json`,因此必须与索引文件一起预览。
-
-## 收录条件
-
-- 插件由 omdsc-dev 组织自研并维护。
-- 插件不采集、不外传用户凭证与数据,不隐式发起网络请求。
-- 产物符合 dsc 插件产物规范: 单个浏览器 ESM js 文件,导出 `activate(context)`,不引用 Node 内置模块与后端接口。
-- 提供 https 分发地址,或提供可构建的仓库地址。
-- 条目通过 `node scripts/build-index.mjs` 的全部校验。
-
-细节见 [plugins/README.md](plugins/README.md)。
-
-## 安装方法
-
-1. 在 DeepSeek-Chat-Enhanced 的侧边栏打开插件面板。
-2. 在面板底部的「从地址安装」输入框中粘贴插件的下载地址。
-3. 点击「安装」,插件随即自动启用。
-
-站点为每个条目给出同样的三步说明,并提供一键复制下载地址。
-
-## 站点行为
-
-- 读取本仓库自己的 `./index.json`,不访问任何外部地址。
-- 空索引时显示空态说明,说明组织尚未发布可安装的同源插件。
-- 中英双语切换,深浅色跟随系统设置。
-- 提示统一使用页面内联文案,不调用浏览器原生弹窗。
-- 窄屏单列显示,不引入前端框架与运行时依赖。
-
-## 部署
-
-`.github/workflows/deploy.yml` 在推送到 `main` 且改动落在 `plugins/`、`scripts/`、`src/`、`build.mjs` 时触发,也支持手动触发。工作流执行 `pnpm install --frozen-lockfile` 与 `pnpm build`,把 `dist/` 部署到 Pages。
-
-权限只授予 `contents: read`、`pages: write`、`id-token: write`。
-
-仓库需要一并提交 `pnpm-lock.yaml`,否则冻结安装会失败。
+- 签名不通过时插件市场会警告用户并建议重新下载,不会静默运行。
+- 收录不等于认证。签名只证明分发内容与签名者一致,不代表插件行为经过审查。
+- 私钥只放 CI secrets 与本地环境变量,不要提交。`.gitignore` 已排除 `.env`。
+- 更换合集私钥会让 dsc 已签发的信任签名全部失效,必须重新申请。
+- 签名覆盖文件字节。换行、缩进或空白的任何改动都会让校验失败,仓库统一使用 LF。
+- 插件产物建议行压缩,既减小体积,也避免无意义的空白差异。
 
 ## 许可
 
-Apache-2.0,见 [LICENSE](LICENSE)。
+Apache License 2.0,见 [LICENSE](LICENSE)。

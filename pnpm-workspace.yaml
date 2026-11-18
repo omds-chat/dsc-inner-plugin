@@ -1,3 +1,4 @@
-# pnpm 12 默认拦截依赖的构建脚本,这里显式放行 esbuild 的安装脚本。
-allowBuilds:
-  esbuild: true
+# 本仓库不引入任何依赖。若后续新增带构建脚本的依赖,在此放行。
+packages:
+  - .
+onlyBuiltDependencies: []

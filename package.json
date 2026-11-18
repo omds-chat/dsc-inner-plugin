@@ -1,26 +1,29 @@
 {
   "name": "dsc-inner-plugin",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "dsc 同源插件索引: 收录 omdsc-dev 组织自研插件",
+  "description": "dsc 组织自研插件合集: 按分发规范 v2 收录、签名并分发插件",
   "license": "Apache-2.0",
-  "homepage": "https://omdsc-dev.github.io/dsc-inner-plugin/index.json",
+  "homepage": "https://omdsc-dev.github.io/dsc-inner-plugin/",
   "repository": {
     "type": "git",
     "url": "https://github.com/omdsc-dev/dsc-inner-plugin.git"
   },
-  "scripts": {
-    "build": "node build.mjs && node scripts/build-index.mjs",
-    "build:site": "node build.mjs",
-    "build:index": "node scripts/build-index.mjs",
-    "type": "tsc --noEmit"
-  },
-  "devDependencies": {
-    "esbuild": "^0.25.0",
-    "typescript": "^5.6.3"
-  },
   "engines": {
-    "node": ">=18"
-  }
+    "node": ">=20"
+  },
+  "scripts": {
+    "import": "node .github/scripts/import-plugins.mjs --manifest .github/plugins-sources.json",
+    "verify": "node scripts/verify-collection.mjs --dir . --allow-empty-trust-sign",
+    "verify:strict": "node scripts/verify-collection.mjs --dir .",
+    "build": "node scripts/build-collection.mjs --dir . --allow-empty-trust-sign --out dist",
+    "sign": "node scripts/build-collection.mjs --dir . --sign --out dist"
+  },
+  "keywords": [
+    "dsc",
+    "dsc-plugin",
+    "plugin-collection",
+    "in-house"
+  ]
 }

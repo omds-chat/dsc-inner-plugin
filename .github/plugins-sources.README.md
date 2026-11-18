@@ -1,0 +1,54 @@
+# 收录来源清单
+
+`.github/plugins-sources.json` 是 CI 收录插件时读取的唯一输入。改这个文件就是改收录结果,提交 PR 即可申请收录。
+
+文件内容是数组,每个元素描述一个插件来源。当前为空数组,表示合集尚未收录任何插件。
+
+## 字段
+
+| 字段 | 类型 | 必填 | 说明 |
+|:---:|:---:|:---:|:---:|
+| `repo` | string | 是 | 插件源码位置。git 地址,或相对本仓库根目录的本地路径 |
+| `ref` | string | 否 | git 分支、标签或提交。缺省时取远端默认分支;本地路径忽略该字段 |
+| `author` | string | 是 | 作者英文名称,即 `plugins/` 下的目录名 |
+| `plugin` | string | 是 | 插件名,即 `meta.json` 的 `name` |
+| `profile` | string | 否 | 作者主页链接。给出时会一并登记到 `plugins/author_manifest.json` |
+
+`author` 仅允许小写字母、数字、连字符,不得以连字符开头或结尾。`plugin` 必须匹配 `dsc-xxx` 或 `@scope/dsc-xxx`。
+
+## 示例
+
+以下片段只说明格式,不是已收录的插件:
+
+```json
+[
+  {
+    "repo": "https://github.com/alice/dsc-demo",
+    "ref": "v1.0.0",
+    "author": "alice",
+    "plugin": "dsc-demo",
+    "profile": "https://github.com/alice"
+  },
+  {
+    "repo": "../dsc-demo-local",
+    "author": "alice",
+    "plugin": "dsc-demo"
+  }
+]
+```
+
+## 收录时会发生什么
+
+对每一项,CI 依次执行:
+
+1. 把 `repo` 克隆或复制到 `temp/import/`。
+2. 在该目录执行 `pnpm install --frozen-lockfile` 与 `pnpm build`。
+3. 读取 `dist/meta.json` 取得版本号,把 `dist/meta.json`、`dist/plugin.js` 复制到 `plugins/<author>/<plugin>/<version>/`。若 `dist/` 内存在 `plugin_sign.json`,一并复制,以便保留作者自签名。
+4. 更新该插件的 `versions.json`、该作者的 `plugin_manifest.json`、根目录 `datalog.json`。
+5. 删除 `temp/import/` 内的临时目录。
+
+任何一步失败,该插件被跳过并在日志中写明原因,其余插件照常处理,流程退出码保持 0。
+
+## 收录之后
+
+新条目在 `datalog.json` 里的 `tag` 初始为空数组。标签需要人工从根目录 `tags.json` 的预设标签中挑选后补上,校验脚本会拒绝未在 `tags.json` 中声明的标签。
