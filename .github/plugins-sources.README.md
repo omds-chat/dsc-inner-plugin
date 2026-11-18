@@ -1,8 +1,8 @@
 # 收录来源清单
 
-`.github/plugins-sources.json` 是 CI 收录插件时读取的唯一输入。改这个文件就是改收录结果,提交 PR 即可申请收录。
+`.github/plugins-sources.json` 是 CI 收录插件时读取的唯一输入。改这个文件就是改收录结果;本索引只收录组织自研插件,由组织维护者提交 PR 修改。
 
-文件内容是数组,每个元素描述一个插件来源。当前为空数组,表示本索引尚未收录任何插件。
+文件内容是数组,每个元素描述一个插件来源。空数组表示本索引尚未收录任何插件。
 
 ## 字段
 
@@ -23,15 +23,15 @@
 ```json
 [
   {
-    "repo": "https://github.com/alice/dsc-demo",
+    "repo": "https://github.com/omdsc-dev/dsc-demo",
     "ref": "v1.0.0",
-    "author": "alice",
+    "author": "omdsc-dev",
     "plugin": "dsc-demo",
-    "profile": "https://github.com/alice"
+    "profile": "https://github.com/omdsc-dev"
   },
   {
     "repo": "../dsc-demo-local",
-    "author": "alice",
+    "author": "omdsc-dev",
     "plugin": "dsc-demo"
   }
 ]

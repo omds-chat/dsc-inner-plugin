@@ -1,6 +1,6 @@
 # dsc-inner-plugin
 
-The internal plugin index endorsed by dsc: it lists optional in-house plugins decoupled from the dsce codebase, and dsc signs the whole site at publish time.
+The internal plugin index endorsed by dsc: it lists optional in-house plugins decoupled from the DeepSeek-Chat-Enhanced codebase, and dsc signs the whole site at publish time.
 
 [简体中文](README.md)
 
@@ -8,8 +8,8 @@ The internal plugin index endorsed by dsc: it lists optional in-house plugins de
 
 This repository is an internal plugin index, not a community collection and not a separate index service: the distributed content is the index itself, and the build output in `dist/` is deployed straight to GitHub Pages.
 
-- It lists optional in-house plugins decoupled from the dsce codebase, built and maintained by dsc. Third-party submissions are not accepted.
-- dsc signs and publishes it directly. When the market verifies this source, it verifies the signature data of this repository's Pages site (the site-wide CMS signatures plus `dist/eec.pem`), not the "collection EEC signs each plugin" model.
+- It lists optional in-house plugins decoupled from the DeepSeek-Chat-Enhanced codebase, built and maintained by dsc. Third-party submissions are not accepted.
+- dsc signs and publishes it directly. When the market verifies this source, it first verifies the signature data of this repository's Pages site (the site-wide CMS signatures plus `dist/eec.pem`), then verifies the author signatures dsc provides as the plugin author.
 - It is functionally similar to [awesome-dsc-plugin](https://github.com/omdsc-dev/awesome-dsc-plugin) but structurally different: that repository is a community collection where an EEC signs plugin files; here dsc signs the whole site and then signs plugins as their author.
 - In-house plugins are trusted by origin, but they still go through the ordinary dsc-market install channel (a soft security gate), so their artifacts must remain independently verifiable.
 - Being listed is not a certification. This repository guarantees only that distributed content matches its signatures, and does not audit plugin behaviour.
@@ -19,7 +19,7 @@ This repository is an internal plugin index, not a community collection and not 
 | Dimension | This repository | awesome-dsc-plugin |
 |:---:|:---:|:---:|
 | Role | internal plugin index endorsed by dsc | community plugin collection |
-| What it lists | optional in-house plugins decoupled from dsce, built by dsc | third-party plugins from community submissions |
+| What it lists | optional in-house plugins decoupled from DeepSeek-Chat-Enhanced, built by dsc | third-party plugins from community submissions |
 | Trust anchor | the dsc web EEC signs the whole site | a collection EEC signs plugin files |
 | Plugin file signatures | dsc signs `*.author.sig` as the author | authors sign `*.author.sig`, the collection adds CMS signatures |
 | Version directory | `meta.json`, `plugin.js`, author signatures | `meta.json`, `plugin.js`, two CMS signatures, author signatures |
@@ -27,16 +27,16 @@ This repository is an internal plugin index, not a community collection and not 
 | Market verification order | verify the Pages site signatures first, then author signatures | verify the collection EEC chain first, then plugin signatures |
 | Install channel | ordinary dsc-market channel with a soft security gate | the same |
 
-## Current state
+## Index files
 
-omdsc-dev has not published an installable in-house plugin yet, so this index is empty:
+Index content comes only from the data files and the `plugins/` directory; no plugin entry is written by hand:
 
 | File | Content |
 |:---:|:---:|
-| `datalog.json` | `[]` |
-| `plugins/author_manifest.json` | `[]` |
-| `.github/plugins-sources.json` | `[]` |
-| root `eec.pem` | absent; the web EEC is injected only at signing time |
+| `datalog.json` | plugin catalogue, unique `plugin_name` per entry |
+| `plugins/author_manifest.json` | registered authors |
+| `.github/plugins-sources.json` | source manifest, an empty array means no plugin is listed |
+| root `eec.pem` | absent; the web EEC certificate enters `dist/` only at signing time |
 
 On an empty index `pnpm verify` and `pnpm build` pass without any certificate. Signing needs the web EEC key and certificate: when they are missing locally the script only warns and keeps an unsigned `dist/`, while CI treats the same condition as an error. This repository never invents plugin entries.
 
@@ -45,7 +45,7 @@ On an empty index `pnpm verify` and `pnpm build` pass without any certificate. S
 A plugin is listed only when every point below holds:
 
 - It is built and maintained by omdsc-dev, with no third-party submissions.
-- It is decoupled from the dsce codebase: it can be installed and disabled on its own, without coordinated changes in dsce itself.
+- It is decoupled from the DeepSeek-Chat-Enhanced codebase: it can be installed and disabled on its own, without coordinated changes in that product itself.
 - It commits to never collecting or leaking user credentials and data, never issues implicit network requests, and never reads conversation content unrelated to its own purpose.
 - Its artifact is a single browser ESM script that exports `activate(context)` and depends on neither Node built-ins nor a backend API.
 - It comes with a buildable source repository, so `pnpm build` can reproduce the artifact in CI.
@@ -116,17 +116,17 @@ The market reads the index, fetches files and verifies signatures in this order.
 | 1 | `<base_url>/eec.pem` | read the dsc web signing certificate |
 | 2 | `<base_url>/web_files.json` and `web_files.json.sig` | read the signed manifest and verify the manifest signature first |
 | 3 | `<base_url>/<file>.sig` | verify the CMS signature of every file listed in the manifest |
-| 4 | `<base_url>/datalog.json`, `versions.json`, every `meta.json` | index data, already verified in the previous step, drives what the market displays |
+| 4 | `<base_url>/datalog.json`, `plugins/<author>/<plugin>/versions.json`, every `meta.json` | index data, already verified in the previous step, drives what the market displays |
 | 5 | `<base_url>/plugins/<author>/author_pub.pem` and `*.author.sig` | verify the plugin author signature |
 | 6 | `<base_url>/plugins/<author>/<plugin>/<x.y.z>/plugin.js` | read the runtime script, verified in the previous step |
 
 The trust anchor for the chain is not in this repository but on the `online-data` branch: the market reads `rootCa` from `index.json`, fetches `root_ca.crt`, and uses it to verify `dist/eec.pem`. This repository only publishes the signed data to Pages.
 
-A single source usually gets several `base_url` entries: a mirrored CDN distribution service, `raw.githubusercontent.com`, and GitHub Pages, with the last two as fallbacks and a one second cap per request. The market stores the source type, script URL, certificate and signatures in IndexedDB; this index is recorded as source type `inner`; the certificate and signatures are re-verified before every plugin run to catch tampering.
+The market caches the source type, script URL, certificate and signatures; this index is recorded as source type `inner`; the certificate and signatures are re-verified before every plugin run to catch tampering.
 
 ### The soft security gate
 
-In-house plugins are trusted by origin: they are built by dsc and decoupled from dsce, with no third party in between. But "trusted" does not mean "unchecked":
+In-house plugins are trusted by origin: they are built by dsc and decoupled from DeepSeek-Chat-Enhanced, with no third party in between. But "trusted" does not mean "unchecked":
 
 - They still go through the ordinary dsc-market install channel and must pass signature verification like any third-party plugin, with no shortcut.
 - When a site-wide signature, an author signature or the certificate chain fails, the market warns the user and suggests downloading again. It never runs the plugin silently.
@@ -142,6 +142,7 @@ The source repository holds index data and author material only; it holds no cer
 dsc-inner-plugin/
 ├── .github/
 │   ├── plugins-sources.json            source manifest, the only input that decides what is listed
+│   ├── plugins-sources.README.md       manifest fields and import rules
 │   └── workflows/build-and-deploy.yml  import, verify, build, sign the site and publish
 ├── .gitattributes                      enforce LF line endings
 ├── .gitignore
@@ -149,7 +150,7 @@ dsc-inner-plugin/
 ├── README.md
 ├── README.en-US.md
 ├── meta.json                           index metadata, download counting switch
-├── datalog.json                        plugin catalogue, keyed by plugin name
+├── datalog.json                        plugin catalogue, unique plugin_name per entry
 ├── tags.json                           preset tags
 ├── package.json
 ├── pnpm-lock.yaml
@@ -176,7 +177,7 @@ dsc-inner-plugin/
     └── import-plugins.mjs              build and import plugins from the manifest
 ```
 
-The build output `dist/` adds four kinds of content on top of the source tree: `eec.pem`, one `.sig` per signed file, `web_files.json`, and `web_files.json.sig`.
+The build output `dist/` copies `meta.json`, `datalog.json`, `tags.json` and `plugins/` from the repository root and writes `build-info.json` as the distribution index; the signing stage then adds `eec.pem`, one `.sig` per signed file, `web_files.json` and `web_files.json.sig`.
 
 Naming rules and required files are in [plugins/README.md](plugins/README.md).
 
@@ -184,18 +185,18 @@ Naming rules and required files are in [plugins/README.md](plugins/README.md).
 
 The root `meta.json` declares the download counting switch only:
 
-| Field | Current value | Meaning |
+| Field | Value | Meaning |
 |:---:|:---:|:---:|
 | `DOWNLOAD_COUNT_ENABLE` | `false` | When `true`, the market fires one fire-and-forget POST per download and tells users this source counts downloads |
 | `DOWNLOAD_COUNT_API` | absent | Counting endpoint, required only when counting is on |
 | `API_NEED_IP` | `false` | Whether the counting request carries the caller's public IP |
 
-Counting is currently off for this index.
+Counting is off for this index.
 
 ## How to get a plugin listed
 
-1. Open a pull request against `.github/plugins-sources.json`, one entry per plugin, with `repo`, an optional `ref`, `author` and `plugin`.
-2. After merge, CI clones or copies the source into `temp/`, runs `pnpm install --frozen-lockfile` and `pnpm build`, writes `dist/meta.json` and `dist/plugin.js` into `plugins/<author>/<plugin>/<version>/`, stores author-side detached signatures as `*.author.sig`, stores `dist/author_pub.pem` as `plugins/<author>/author_pub.pem`, then updates that plugin's `versions.json`, that author's `plugin_manifest.json` and the root `datalog.json`.
+1. An organisation maintainer opens a pull request against `.github/plugins-sources.json`, one entry per plugin, with `repo`, an optional `ref`, `author` and `plugin`. Field and import rules are in [.github/plugins-sources.README.md](.github/plugins-sources.README.md).
+2. After merge, CI clones or copies the source into `temp/import/`, runs `pnpm install --frozen-lockfile` and `pnpm build`, writes `dist/meta.json` and `dist/plugin.js` into `plugins/<author>/<plugin>/<version>/`, stores author-side detached signatures as `*.author.sig`, stores `dist/author_pub.pem` as `plugins/<author>/author_pub.pem`, then updates that plugin's `versions.json`, that author's `plugin_manifest.json` and the root `datalog.json`.
 3. Add tags by hand. New catalogue entries start with an empty `tag` array and need tags picked from `tags.json`. Undeclared tags are rejected by verification.
 4. Build and publish. CI runs `pnpm verify` (consistency check, no certificate chain involved), `pnpm build` (produce `dist/`), `scripts/sign-site.mjs` (site-wide signing with `secrets.WEB_EEC_KEY`) and `scripts/verify-site.mjs` (signature self-check), then publishes `dist/` to Pages.
 

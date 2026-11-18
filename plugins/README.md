@@ -2,7 +2,7 @@
 
 本目录存放索引收录的全部插件,按「作者 / 插件 / 版本」三层组织。目录名与清单字段一一对应,校验脚本对不上就报错。
 
-本索引只收录从 dsce 本体解耦出来的可选内部插件,当前尚无条目,因此目录里只有本文件与空的 `author_manifest.json`。
+本索引只收录从 DeepSeek-Chat-Enhanced 本体解耦出来的可选内部插件。条目由收录流程写入,不手工编辑;未收录插件时,目录里只有本文件与空的 `author_manifest.json`。
 
 ## 作者目录
 
@@ -10,19 +10,19 @@
 
 - 目录名即作者英文名称,必须与 `datalog.json` 的 `author`、`plugins/author_manifest.json` 的 `username` 完全一致。
 - 仅允许小写字母、数字、连字符,不得以连字符开头或结尾,最长 39 字符。
-- 作者目录内必需两个文件:
+- 作者目录内有两个文件:
+  - `plugin_manifest.json`:该作者的插件名数组,例如 `["dsc-demo"]`,必需。
   - `author_pub.pem`:作者公钥,OpenSSL PEM,Ed25519。作者启用裸公钥分离签名时用于验签。
-  - `plugin_manifest.json`:该作者的插件名数组,例如 `["dsc-demo"]`。
 
 作者公钥由插件构建产物 `dist/author_pub.pem` 随收录流程复制进来,不要在索引里手工生成。缺失时校验只给警告,该作者的插件便不能带作者签名。
 
-本索引的作者就是 dsc 组织自身,因此作者目录通常只有一个 `omdsc-dev`。
+本索引的作者即 dsc 组织自身,作者目录通常只有 `omdsc-dev` 一个。
 
 ## 插件目录
 
 `plugins/<author>/<plugin>/`
 
-- 目录名取插件 npm 包名去掉命名空间前缀:`dsc-demo` 写作 `dsc-demo`,`@alice/dsc-demo` 同样写作 `dsc-demo`。
+- 目录名取插件 npm 包名去掉命名空间前缀:`dsc-demo` 写作 `dsc-demo`,`@omdsc-dev/dsc-demo` 同样写作 `dsc-demo`。
 - 插件名必须匹配 `dsc-xxx` 或 `@scope/dsc-xxx`,仅允许小写字母、数字、点、下划线、连字符。
 - 插件目录内必需 `versions.json`:
 
@@ -46,7 +46,7 @@
 | `meta.json.author.sig` | 否 | 插件作者 | `meta.json` 的裸公钥分离签名,随插件产物提供 |
 | `plugin.js.author.sig` | 否 | 插件作者 | `plugin.js` 的裸公钥分离签名,随插件产物提供 |
 
-版本目录内不再有 `meta.json.sig` 与 `plugin.js.sig`:本索引不设「合集 EEC 签发插件」这一层。插件文件的整站签名在 `dist/` 里生成,由 `scripts/sign-site.mjs` 为每个 `.html/.js/.css/.json` 文件写出 `<文件>.sig`,因此 `dist/plugins/.../plugin.js.sig` 由构建阶段产出,不进入源码目录。
+版本目录内只有作者签名,没有 `meta.json.sig` 与 `plugin.js.sig`:插件文件的整站签名在 `dist/` 里生成,由 `scripts/sign-site.mjs` 为每个 `.html/.js/.css/.json` 文件写出 `<文件>.sig`,因此 `dist/plugins/.../plugin.js.sig` 由签名阶段产出,不进入源码目录。
 
 作者签名是可选项,但对 dsc 自研插件是默认项:作者不签名时,该版本只有整站签名。
 

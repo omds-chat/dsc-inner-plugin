@@ -1,6 +1,6 @@
 # dsc-inner-plugin
 
-dsc 背书的内部插件索引: 收录从 dsce 本体解耦出来的可选内部插件,整站由 dsc 签名发布。
+dsc 背书的内部插件索引: 收录从 DeepSeek-Chat-Enhanced 本体解耦出来的可选内部插件,整站由 dsc 签名发布。
 
 [English](README.en-US.md)
 
@@ -8,8 +8,8 @@ dsc 背书的内部插件索引: 收录从 dsce 本体解耦出来的可选内�
 
 本仓库是内部插件索引,不是社区合集,也不提供额外的索引服务: 分发内容就是索引本身,构建产物 `dist/` 直接部署到 GitHub Pages。
 
-- 收录对象是从 dsce 本体解耦出来的可选内部插件,由 dsc 自研维护,不面向第三方投稿。
-- 由 dsc 直接签名发布。市场校验本仓库时,校验的是本仓库 Pages 页面的签名数据(整站 CMS 签名与 `dist/eec.pem`),不是「合集 EEC 签发插件」那套。
+- 收录对象是从 DeepSeek-Chat-Enhanced 本体解耦出来的可选内部插件,由 dsc 自研维护,不面向第三方投稿。
+- 由 dsc 直接签名发布。市场校验本仓库时,先校验本仓库 Pages 页面的签名数据(整站 CMS 签名与 `dist/eec.pem`),再校验 dsc 作为插件作者给出的作者签名。
 - 与 [awesome-dsc-plugin](https://github.com/omdsc-dev/awesome-dsc-plugin) 功能相似但结构不同: 那边是社区合集加 EEC 签插件;这边是 dsc 自己签整站,再由 dsc 作为作者签插件。
 - 内部插件本身可信,但仍要走 dsc-market 的普通安装通道(软安全门禁),所以产物必须可被独立校验。
 - 收录不等于认证。本仓库只保证分发内容与签名一致,不审查插件行为。
@@ -19,7 +19,7 @@ dsc 背书的内部插件索引: 收录从 dsce 本体解耦出来的可选内�
 | 维度 | 本仓库 | awesome-dsc-plugin |
 |:---:|:---:|:---:|
 | 定位 | dsc 背书的内部插件索引 | 社区插件合集 |
-| 收录范围 | 从 dsce 解耦的可选内部插件,dsc 自研 | 社区投稿的第三方插件 |
+| 收录范围 | 从 DeepSeek-Chat-Enhanced 解耦的可选内部插件,dsc 自研 | 社区投稿的第三方插件 |
 | 信任来源 | dsc 网页 EEC 签整站 | 合集 EEC 签插件文件 |
 | 插件文件签名 | dsc 作为作者签 `*.author.sig` | 作者自签 `*.author.sig`,合集再签 CMS |
 | 版本目录文件 | `meta.json`、`plugin.js`、作者签名 | `meta.json`、`plugin.js`、两份 CMS 签名、作者签名 |
@@ -27,25 +27,25 @@ dsc 背书的内部插件索引: 收录从 dsce 本体解耦出来的可选内�
 | 市场校验顺序 | 先验 Pages 整站签名,再验作者签名 | 先验合集 EEC 链,再验插件签名 |
 | 安装通道 | dsc-market 普通通道,软安全门禁 | 同左 |
 
-## 当前状态
+## 索引文件
 
-组织尚未发布可安装的内部插件,因此本索引为空:
+索引内容全部来自数据文件与 `plugins/` 目录,没有手写的插件条目:
 
 | 文件 | 内容 |
 |:---:|:---:|
-| `datalog.json` | `[]` |
-| `plugins/author_manifest.json` | `[]` |
-| `.github/plugins-sources.json` | `[]` |
-| 根目录 `eec.pem` | 不存在,网页 EEC 只在签名阶段注入 |
+| `datalog.json` | 插件目录,每个条目的 `plugin_name` 唯一 |
+| `plugins/author_manifest.json` | 已登记的作者 |
+| `.github/plugins-sources.json` | 收录来源清单,空数组表示未收录插件 |
+| 根目录 `eec.pem` | 不存在;网页 EEC 证书只在签名阶段写入 `dist/` |
 
-空索引下 `pnpm verify` 与 `pnpm build` 直接通过,不需要任何证书。签名阶段需要网页 EEC 私钥与证书: 本地缺失时只警告并保留未签名 `dist/`,CI 缺失则直接失败。本仓库不编造插件条目。
+索引为空时 `pnpm verify` 与 `pnpm build` 直接通过,不需要任何证书。签名阶段需要网页 EEC 私钥与证书: 本地缺失时只警告并保留未签名 `dist/`,CI 缺失则直接失败。本仓库不编造插件条目。
 
 ## 收录条件
 
 只有同时满足以下条件的插件才会被收录:
 
 - 由 omdsc-dev 组织自研并维护,不接受第三方投稿。
-- 从 dsce 本体解耦,可以单独安装、单独停用,不要求 dsce 本体做配套改动。
+- 从 DeepSeek-Chat-Enhanced 本体解耦,可以单独安装、单独停用,不要求该产品本体做配套改动。
 - 承诺不采集、不外传用户凭证与数据,不隐式发起网络请求,不读取与插件功能无关的会话内容。
 - 产物是单个浏览器 ESM 脚本,导出 `activate(context)`,不依赖 Node 内置模块与后端接口。
 - 提供可构建的源码仓库,`pnpm build` 能在 CI 中复核产物。
@@ -116,17 +116,17 @@ dsc 同时是插件作者,用 Ed25519 裸公钥给每个版本的 `meta.json` �
 | 1 | `<base_url>/eec.pem` | 取 dsc 网页签名证书 |
 | 2 | `<base_url>/web_files.json` 与 `web_files.json.sig` | 取签名清单,先校验清单签名 |
 | 3 | `<base_url>/<文件>.sig` | 用清单列出的文件逐个校验 CMS 签名 |
-| 4 | `<base_url>/datalog.json`、`versions.json`、各 `meta.json` | 索引数据,已在上一步验签,据此显示插件与版本 |
+| 4 | `<base_url>/datalog.json`、`plugins/<author>/<plugin>/versions.json`、各 `meta.json` | 索引数据,已在上一步验签,据此显示插件与版本 |
 | 5 | `<base_url>/plugins/<author>/author_pub.pem` 与 `*.author.sig` | 校验插件作者签名 |
 | 6 | `<base_url>/plugins/<author>/<plugin>/<x.y.z>/plugin.js` | 取运行时脚本,已在上一步验签 |
 
 证书链的信任锚不在本仓库,而在 `online-data` 分支: 市场从 `index.json` 读取 `rootCa` 指向的 `root_ca.crt` 作为锚点,再用它校验 `dist/eec.pem`。本仓库只负责把签名数据发布到 Pages。
 
-同一个来源通常配置多个 `base_url`,依次是自动同步的 CDN 分发服务、`raw.githubusercontent.com`、GitHub Pages,后两者做兜底,单次请求最多等待 1 秒。市场把来源类型、脚本地址、证书与签名一并存入 IndexedDB,本索引的来源类型记为 `inner`;证书与签名在每次预运行插件前重新校验,防止篡改。
+市场把来源类型、脚本地址、证书与签名一并缓存,本索引的来源类型记为 `inner`;证书与签名在每次预运行插件前重新校验,防止篡改。
 
 ### 软安全门禁
 
-内部插件本身可信: 由 dsc 自研,与 dsce 同源解耦,不经过第三方。但「可信」不等于「免检」:
+内部插件本身可信: 由 dsc 自研,与 DeepSeek-Chat-Enhanced 同源解耦,不经过第三方。但「可信」不等于「免检」:
 
 - 仍然走 dsc-market 的普通安装通道,和第三方插件一样要过签名校验,没有快捷通道。
 - 整站签名失败、作者签名失败或证书链不通时,市场警告用户并建议重新下载,不会静默运行。
@@ -142,6 +142,7 @@ dsc 同时是插件作者,用 Ed25519 裸公钥给每个版本的 `meta.json` �
 dsc-inner-plugin/
 ├── .github/
 │   ├── plugins-sources.json            收录来源清单,改这里就是改收录结果
+│   ├── plugins-sources.README.md       来源清单的字段与收录规则
 │   └── workflows/build-and-deploy.yml  收录、校验、构建、整站签名并发布
 ├── .gitattributes                      统一 LF 换行
 ├── .gitignore
@@ -149,7 +150,7 @@ dsc-inner-plugin/
 ├── README.md
 ├── README.en-US.md
 ├── meta.json                           索引元数据,含下载计数开关
-├── datalog.json                        插件目录,以插件名称为唯一键
+├── datalog.json                        插件目录,每个条目的 plugin_name 唯一
 ├── tags.json                           预设标签
 ├── package.json
 ├── pnpm-lock.yaml
@@ -176,7 +177,7 @@ dsc-inner-plugin/
     └── import-plugins.mjs              按来源清单构建并收录插件
 ```
 
-构建产物 `dist/` 在源码目录之外多出四类内容: `eec.pem`、每个被签名文件的 `.sig`、`web_files.json` 与 `web_files.json.sig`。
+构建产物 `dist/` 复制根目录的 `meta.json`、`datalog.json`、`tags.json` 与 `plugins/`,并写出 `build-info.json` 作为分发索引;签名阶段再追加 `eec.pem`、每个被签名文件的 `.sig`、`web_files.json` 与 `web_files.json.sig`。
 
 目录命名与必需文件见 [plugins/README.md](plugins/README.md)。
 
@@ -184,18 +185,18 @@ dsc-inner-plugin/
 
 根目录 `meta.json` 只声明下载计数的开关:
 
-| 字段 | 当前值 | 说明 |
+| 字段 | 取值 | 说明 |
 |:---:|:---:|:---:|
 | `DOWNLOAD_COUNT_ENABLE` | `false` | 为 `true` 时插件市场每次下载都会向计数接口发送一次不等待回复的 POST 请求,并提示用户该来源启用了计数 |
 | `DOWNLOAD_COUNT_API` | 缺省 | 计数接口地址,仅在启用计数时需要 |
 | `API_NEED_IP` | `false` | 计数请求是否携带请求来源的公网 IP |
 
-本索引当前不启用下载计数。
+本索引不启用下载计数。
 
 ## 收录流程
 
-1. 提交 PR 修改 `.github/plugins-sources.json`,每个插件一项,写明 `repo`、可选的 `ref`、`author` 与 `plugin`。
-2. 合并后 CI 依次执行: 克隆或复制源码到 `temp/`、`pnpm install --frozen-lockfile`、`pnpm build`、把 `dist/meta.json` 与 `dist/plugin.js` 写入 `plugins/<author>/<plugin>/<version>/`、把作者侧分离签名落为 `*.author.sig`、把 `dist/author_pub.pem` 落为 `plugins/<author>/author_pub.pem`,再更新该插件的 `versions.json`、该作者的 `plugin_manifest.json` 与根目录 `datalog.json`。
+1. 由组织维护者提交 PR 修改 `.github/plugins-sources.json`,每个插件一项,写明 `repo`、可选的 `ref`、`author` 与 `plugin`。字段与收录规则见 [.github/plugins-sources.README.md](.github/plugins-sources.README.md)。
+2. 合并后 CI 依次执行: 克隆或复制源码到 `temp/import/`、`pnpm install --frozen-lockfile`、`pnpm build`、把 `dist/meta.json` 与 `dist/plugin.js` 写入 `plugins/<author>/<plugin>/<version>/`、把作者侧分离签名落为 `*.author.sig`、把 `dist/author_pub.pem` 落为 `plugins/<author>/author_pub.pem`,再更新该插件的 `versions.json`、该作者的 `plugin_manifest.json` 与根目录 `datalog.json`。
 3. 人工补充标签。新条目在 `datalog.json` 里的 `tag` 初始为空数组,需要从 `tags.json` 的预设标签中挑选后提交。未在 `tags.json` 中声明的标签会被校验拒绝。
 4. 构建与发布。CI 依次执行 `pnpm verify`(自洽性校验,不涉及证书链)、`pnpm build`(生成 `dist/`)、`scripts/sign-site.mjs`(用 `secrets.WEB_EEC_KEY` 做整站签名)、`scripts/verify-site.mjs`(签名自检),最后把 `dist/` 发布到 Pages。
 
