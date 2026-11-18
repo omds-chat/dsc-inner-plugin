@@ -2,13 +2,19 @@
 /**
  * 按来源清单收录插件。
  *
- * 对清单中的每一项: 取得源码、安装依赖、构建、把 dist 产物写入合集目录,再更新该插件的版本列表、
- * 该作者的插件清单与根目录插件目录。单项失败只跳过该项并记录原因,不影响其他项,退出码保持 0。
+ * 对清单中的每一项:取得源码、安装依赖、构建、把 dist 产物写入合集目录,
+ * 再更新该插件的版本列表、该作者的插件清单与根目录插件目录。
+ * 单项失败只跳过该项并记录原因,不影响其他项,退出码保持 0。
+ *
+ * 与旧版 JSON 签名实现的差别:不再处理 plugin_sign.json 与 plugin_secret.pub,
+ * 改为复制作者侧分离签名(plugin.js.sig 与 meta.json.sig 分别落为
+ * plugin.js.author.sig 与 meta.json.author.sig),以及作者公钥 dist/author_pub.pem
+ * 到 plugins/<author>/author_pub.pem。合集 CMS 签名由 build-collection.mjs --sign 生成。
  *
  * 用法:
- *   node .github/scripts/import-plugins.mjs
- *   node .github/scripts/import-plugins.mjs --manifest .github/plugins-sources.json
- *   node .github/scripts/import-plugins.mjs --manifest ./sources.json --keep-temp
+ *   node scripts/import-plugins.mjs
+ *   node scripts/import-plugins.mjs --manifest .github/plugins-sources.json
+ *   node scripts/import-plugins.mjs --manifest ./sources.json --keep-temp
  */
 import { spawn } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -16,7 +22,7 @@ import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
-const ROOT_DIR = resolve(SCRIPT_DIR, '..', '..')
+const ROOT_DIR = resolve(SCRIPT_DIR, '..')
 const TEMP_DIR = join(ROOT_DIR, 'temp', 'import')
 const DEFAULT_MANIFEST = '.github/plugins-sources.json'
 
@@ -30,9 +36,19 @@ const VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 const URL_PATTERN = /^https?:\/\/\S+$/i
 const GIT_PATTERN = /^(?:https:\/\/|git@|git:\/\/|ssh:\/\/)/i
 
+/** dist 内可选的作者分离签名,键为源文件名,值为落盘到版本目录的文件名 */
+const AUTHOR_SIGNATURE_MAP = [
+  { source: 'plugin.js.sig', target: 'plugin.js.author.sig' },
+  { source: 'meta.json.sig', target: 'meta.json.author.sig' },
+]
+/** dist 内的作者公钥文件名 */
+const AUTHOR_PUB_SOURCE = 'author_pub.pem'
+/** 作者目录内的作者公钥文件名 */
+const AUTHOR_PUB_TARGET = 'author_pub.pem'
+
 function usage() {
   process.stdout.write([
-    '用法: node .github/scripts/import-plugins.mjs [选项]',
+    '用法: node scripts/import-plugins.mjs [选项]',
     '',
     '选项:',
     '  --manifest <路径>   来源清单,默认 ' + DEFAULT_MANIFEST,
@@ -200,7 +216,7 @@ function readDist(distDir) {
   }
   const jsPath = join(distDir, 'plugin.js')
   if (!existsSync(jsPath)) throw new Error('构建产物缺少 dist/plugin.js')
-  return { meta, metaPath, jsPath, signPath: join(distDir, 'plugin_sign.json') }
+  return { meta, metaPath, jsPath, distDir }
 }
 
 function planVersions(pluginDir, version) {
@@ -307,7 +323,8 @@ function validateItem(item, label) {
 async function importOne(item, label, options) {
   const { author, plugin, profile } = validateItem(item, label)
   const dirName = plugin.split('/').pop()
-  const pluginDir = join(ROOT_DIR, 'plugins', author, dirName)
+  const authorDir = join(ROOT_DIR, 'plugins', author)
+  const pluginDir = join(authorDir, dirName)
   const workDir = join(TEMP_DIR, author + '-' + dirName)
   let versionDir = null
 
@@ -315,7 +332,7 @@ async function importOne(item, label, options) {
     log('  ' + (await prepareSource(item, workDir)))
     await buildSource(workDir)
 
-    const { meta, metaPath, jsPath, signPath } = readDist(join(workDir, 'dist'))
+    const { meta, metaPath, jsPath, distDir } = readDist(join(workDir, 'dist'))
     if (meta.name !== plugin) {
       throw new Error('dist/meta.json 的 name 为 ' + meta.name + ',与清单的 ' + plugin + ' 不一致')
     }
@@ -324,11 +341,30 @@ async function importOne(item, label, options) {
     mkdirSync(versionDir, { recursive: true })
     cpSync(metaPath, join(versionDir, 'meta.json'))
     cpSync(jsPath, join(versionDir, 'plugin.js'))
-    const keptAuthorSign = existsSync(signPath)
-    if (keptAuthorSign) cpSync(signPath, join(versionDir, 'plugin_sign.json'))
 
-    if (!existsSync(join(ROOT_DIR, 'plugins', author, 'plugin_secret.pub'))) {
-      logWarning('plugins/' + author + '/plugin_secret.pub 不存在,作者自签名将无法校验')
+    // 作者分离签名:插件仓库构建出的 <文件>.sig 落为 <文件>.author.sig
+    const copiedSignatures = []
+    for (const mapping of AUTHOR_SIGNATURE_MAP) {
+      const source = join(distDir, mapping.source)
+      if (!existsSync(source)) continue
+      cpSync(source, join(versionDir, mapping.target))
+      copiedSignatures.push(mapping.target)
+    }
+
+    // 作者公钥:随合集分发,供验签方校验作者签名
+    const pubSource = join(distDir, AUTHOR_PUB_SOURCE)
+    let pubCopied = false
+    if (existsSync(pubSource)) {
+      mkdirSync(authorDir, { recursive: true })
+      cpSync(pubSource, join(authorDir, AUTHOR_PUB_TARGET))
+      pubCopied = true
+    }
+
+    if (copiedSignatures.length > 0 && !pubCopied && !existsSync(join(authorDir, AUTHOR_PUB_TARGET))) {
+      logWarning('plugins/' + author + '/' + AUTHOR_PUB_TARGET + ' 不存在,作者签名将无法校验')
+    }
+    if (copiedSignatures.length === 0) {
+      log('  插件未带作者签名,该版本只有合集 CMS 签名')
     }
 
     const staged = [planVersions(pluginDir, version), planPluginManifest(author, plugin), planDatalog(plugin, author)]
@@ -336,7 +372,7 @@ async function importOne(item, label, options) {
     if (profile) staged.push(planAuthorManifest(author, profile))
 
     applyWrites(staged)
-    return { version, keptAuthorSign }
+    return { version, copiedSignatures, pubCopied }
   } catch (error) {
     if (versionDir) rmSync(versionDir, { recursive: true, force: true })
     throw error
@@ -390,7 +426,9 @@ async function main() {
     log('[' + label + '] ' + name)
     try {
       const result = await importOne(item, label, options)
-      log('  已收录 ' + name + '@' + result.version + (result.keptAuthorSign ? ',保留作者自签名' : ''))
+      const signatureNote = result.copiedSignatures.length > 0 ? ',作者签名 ' + result.copiedSignatures.join('、') : ''
+      const pubNote = result.pubCopied ? ',已更新作者公钥' : ''
+      log('  已收录 ' + name + '@' + result.version + signatureNote + pubNote)
       imported += 1
     } catch (error) {
       logError('  跳过 ' + name + ': ' + (error && error.message ? error.message : String(error)))

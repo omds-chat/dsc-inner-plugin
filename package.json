@@ -14,16 +14,18 @@
     "node": ">=20"
   },
   "scripts": {
-    "import": "node .github/scripts/import-plugins.mjs --manifest .github/plugins-sources.json",
-    "verify": "node scripts/verify-collection.mjs --dir . --allow-empty-trust-sign",
+    "import": "node scripts/import-plugins.mjs --manifest .github/plugins-sources.json",
+    "verify": "node scripts/verify-collection.mjs --dir . --allow-placeholder-eec",
     "verify:strict": "node scripts/verify-collection.mjs --dir .",
-    "build": "node scripts/build-collection.mjs --dir . --allow-empty-trust-sign --out dist",
+    "build": "node scripts/build-collection.mjs --dir . --allow-placeholder-eec --out dist",
     "sign": "node scripts/build-collection.mjs --dir . --sign --out dist"
   },
   "keywords": [
     "dsc",
     "dsc-plugin",
     "plugin-collection",
-    "in-house"
+    "in-house",
+    "openssl",
+    "pki"
   ]
 }

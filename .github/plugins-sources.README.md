@@ -43,9 +43,14 @@
 
 1. 把 `repo` 克隆或复制到 `temp/import/`。
 2. 在该目录执行 `pnpm install --frozen-lockfile` 与 `pnpm build`。
-3. 读取 `dist/meta.json` 取得版本号,把 `dist/meta.json`、`dist/plugin.js` 复制到 `plugins/<author>/<plugin>/<version>/`。若 `dist/` 内存在 `plugin_sign.json`,一并复制,以便保留作者自签名。
-4. 更新该插件的 `versions.json`、该作者的 `plugin_manifest.json`、根目录 `datalog.json`。
-5. 删除 `temp/import/` 内的临时目录。
+3. 读取 `dist/meta.json` 取得版本号,把 `dist/meta.json`、`dist/plugin.js` 复制到 `plugins/<author>/<plugin>/<version>/`。
+4. 若 `dist/` 内存在作者侧分离签名,按下面的对应关系一并复制,保留作者签名:
+   `dist/plugin.js.sig` 落为 `plugin.js.author.sig`,`dist/meta.json.sig` 落为 `meta.json.author.sig`。
+5. 若 `dist/` 内存在 `author_pub.pem`,复制为 `plugins/<author>/author_pub.pem`。
+6. 更新该插件的 `versions.json`、该作者的 `plugin_manifest.json`、根目录 `datalog.json`。
+7. 删除 `temp/import/` 内的临时目录。
+
+收录本身不生成合集签名。合集 CMS 签名(`plugin.js.sig` 与 `meta.json.sig`)由 `scripts/build-collection.mjs --sign` 用本仓库 EEC 统一生成。
 
 任何一步失败,该插件被跳过并在日志中写明原因,其余插件照常处理,流程退出码保持 0。
 

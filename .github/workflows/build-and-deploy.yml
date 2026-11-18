@@ -9,6 +9,7 @@ on:
       - 'scripts/**'
       - '.github/**'
       - 'meta.json'
+      - 'eec.pem'
   release:
     types:
       - published
@@ -24,11 +25,18 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
-# 密钥只从 secrets 读取,仓库内不存放任何私钥。
-# dsc 私钥不在本流程中出现: 信任签名由 dsc 侧离线生成后提交到 plugin_set_sign.json。
+# 本仓库是终端签名方(EEC),但 EEC 尚未签发: 组织目前只为 awesome-dsc-plugin 签发过证书。
+# 本合集的 eec.pem 需向 dsce 根 CA 申请,申请流程见 README 的签名章节。
+# 在拿到真实证书之前,本流程会在「校验 eec.pem 证书链」这一步失败,这是预期状态:
+# 不要为了跑通而跳过校验,也不要用自签证书替代。
+# 私钥只有两个来源:
+#   secrets.EEC_SECRET_KEY  终端签名证书私钥(ECDSA P-256),只在本流程内存中出现;
+#   secrets.ROOT_CA_PEM     根证书 PEM,用于校验证书链,不是私钥。
+# 根证书私钥属于 dsce 仓库的离线环境,绝不出现在本流程。
 env:
-  PLUGIN_PRIVATE_KEY: ${{ secrets.PLUGIN_PRIVATE_KEY }}
-  DSC_PUBLIC_KEY: ${{ secrets.DSC_PUBLIC_KEY }}
+  EEC_SECRET_KEY: ${{ secrets.EEC_SECRET_KEY }}
+  ROOT_CA_PEM: ${{ secrets.ROOT_CA_PEM }}
+  ROOT_CA_URL: ${{ vars.ROOT_CA_URL }}
 
 jobs:
   build:
@@ -50,38 +58,64 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - name: Check OpenSSL
+        run: openssl version
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # 单项失败只跳过该插件,不影响其余插件,本步骤退出码保持 0。
-      - name: Import plugins from sources
-        run: node .github/scripts/import-plugins.mjs --manifest .github/plugins-sources.json
+      # 按 .github/plugins-sources.json 收录插件;清单为空时脚本直接返回 0。
+      # 收录只复制作者侧分离签名(落为 <文件>.author.sig)与作者公钥,不生成合集签名。
+      - name: Import plugins
+        run: node scripts/import-plugins.mjs --manifest .github/plugins-sources.json
 
-      # 公钥总是以私钥推导结果为准,覆盖仓库内的占位公钥。
-      - name: Derive collection public key
-        if: ${{ env.PLUGIN_PRIVATE_KEY != '' }}
-        run: node scripts/sign.mjs derive-public-key "$PLUGIN_PRIVATE_KEY" > plugin_secret.pub
-
-      # 为每个版本的 meta.json 与 plugin.js 签名,合并时保留作者自签名,并产出 dist/。
-      - name: Build and sign distribution
-        run: node scripts/build-collection.mjs --dir . --sign --out dist
-
-      # 配置了 dsc 公钥则严格校验信任签名;未配置时按骨架模式放行并给出警告。
-      - name: Verify collection
+      # 根证书二选一,优先级从高到低:
+      #   1. secrets.ROOT_CA_PEM  根证书 PEM 文本,适合不便公开拉取的场景;
+      #   2. vars.ROOT_CA_URL     根证书下载地址,默认取 online-data 分支的 root_ca.crt。
+      - name: Resolve root CA
         run: |
-          if [ -n "$DSC_PUBLIC_KEY" ]; then
-            node scripts/verify-collection.mjs --dir .
+          set -euo pipefail
+          target="$RUNNER_TEMP/root_ca.crt"
+          if [ -n "${ROOT_CA_PEM:-}" ]; then
+            printf '%s\n' "$ROOT_CA_PEM" > "$target"
+            echo "根证书来源: secrets.ROOT_CA_PEM"
+          elif [ -n "${ROOT_CA_URL:-}" ]; then
+            curl -fsSL "$ROOT_CA_URL" -o "$target"
+            echo "根证书来源: $ROOT_CA_URL"
           else
-            echo "::warning::DSC_PUBLIC_KEY 未配置,合集信任签名按骨架模式放行"
-            node scripts/verify-collection.mjs --dir . --allow-empty-trust-sign
+            echo "::error::缺少根证书,请设置 secrets.ROOT_CA_PEM 或 vars.ROOT_CA_URL"
+            exit 1
           fi
+          echo "ROOT_CA_PATH=$target" >> "$GITHUB_ENV"
 
-      # 把构建结果提交回仓库,让开发者本地也能拿到最新的分发内容。
+      # 强校验: 合集根目录的 eec.pem 必须由该根证书签发,且未过期、
+      # keyUsage 含 digitalSignature、basicConstraints 为 CA:FALSE。
+      # 本仓库的 eec.pem 目前是占位证书,这一步会失败,直到拿到 dsce 根 CA 签发的真实证书。
+      - name: Verify EEC against root CA
+        run: |
+          set -euo pipefail
+          openssl verify -CAfile "$ROOT_CA_PATH" eec.pem
+          openssl x509 -in eec.pem -noout -subject -issuer -enddate
+          openssl x509 -in eec.pem -noout -ext keyUsage
+          openssl x509 -in eec.pem -noout -ext basicConstraints
+          openssl x509 -in eec.pem -noout -checkend 0
+
+      # 用 EEC 私钥为每个版本的 meta.json 与 plugin.js 生成 CMS 分离签名,并生成 dist/。
+      # 私钥只从 secret 注入,且必须与仓库内的 eec.pem 配对,否则步骤直接失败。
+      - name: Build distribution
+        run: node scripts/build-collection.mjs --dir . --root-ca "$ROOT_CA_PATH" --sign --out dist
+
+      # 对即将分发的产物再做一次完整校验: 证书链、CMS 签名、作者签名、清单与版本目录。
+      - name: Verify distribution
+        run: node scripts/verify-collection.mjs --dir dist --root-ca "$ROOT_CA_PATH"
+
+      # 把构建结果提交回仓库,让开发者本地也能拿到最新的分发内容与签名。
+      # eec.pem 由申请人手工提交,不由本流程写入。
       - name: Commit distribution changes
         run: |
           git config user.name 'github-actions'
           git config user.email 'github-actions@github.com'
-          git add plugins plugin_secret.pub datalog.json
+          git add plugins datalog.json
           if git diff --cached --quiet; then
             echo 'distribution content unchanged'
             exit 0

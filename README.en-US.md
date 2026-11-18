@@ -1,6 +1,6 @@
 # dsc-inner-plugin
 
-The plugin collection for dsc plugins built in-house by omdsc-dev. Plugins are indexed, signed and distributed here under distribution specification v2, and the plugin market reads this collection manifests and public key to consume them.
+The plugin collection for dsc plugins built in-house by omdsc-dev. Plugins are indexed, signed and distributed here under distribution specification v2, and the plugin market reads this collection's manifests, end-entity certificate and signatures to consume them.
 
 [简体中文](README.md)
 
@@ -10,7 +10,7 @@ This repository is a plugin collection, not an index service, and it serves no s
 
 - It is a sibling repository of the community collection [awesome-dsc-plugin](https://github.com/omdsc-dev/awesome-dsc-plugin). Both share the same directory layout, verification scripts and signature model; they differ only in what they accept and in their preset tags.
 - The community collection accepts public submissions; this collection lists only plugins built by omdsc-dev and accepts no external submissions.
-- This collection signs plugins as `dsc-inner-plugin`. Different signer identifiers cannot stand in for each other, yet both collections are trusted through the same dsc trust signature model.
+- Both collections are trusted through the same certificate chain: each holds an end-entity certificate issued by the dsce root CA. The certificate subjects differ and the private keys are held separately, so their signatures cannot stand in for each other.
 - Being listed is not a certification. The collection guarantees only that distributed content matches its signatures, and does not audit plugin behaviour.
 
 ## Current state
@@ -21,10 +21,12 @@ omdsc-dev has not published an installable in-house plugin yet, so this collecti
 |:---:|:---:|
 | `datalog.json` | `[]` |
 | `plugins/author_manifest.json` | `[]` |
-| `plugin_set_sign.json` | `{ "sign": [] }` |
-| `plugin_secret.pub` | placeholder key, rewritten by CI from `PLUGIN_PRIVATE_KEY` |
+| `.github/plugins-sources.json` | `[]` |
+| `eec.pem` | placeholder certificate, not yet issued by the dsce root CA |
 
-On an empty collection `pnpm verify` and `pnpm build` both pass, and the empty trust signature only produces a warning. This repository never invents plugin entries.
+On an empty collection `pnpm verify` and `pnpm build` pass in skeleton mode, and the missing root certificate and chain only produce warnings. This repository never invents plugin entries.
+
+This collection does not hold an EEC yet: the organisation has so far issued an end-entity certificate to awesome-dsc-plugin only. CI therefore fails at the "Verify EEC against root CA" step until a real certificate is requested from the dsce root CA and replaces `eec.pem`. That is the expected state; do not skip verification to make the pipeline green.
 
 ## Acceptance criteria
 
@@ -39,25 +41,95 @@ A plugin is listed only when every point below holds:
 
 Plugins that need a backend, need native modules, or cannot be rebuilt in CI are not accepted.
 
+## Signing and trust
+
+### Three roles
+
+The signing system is built on OpenSSL PKI. Three roles each hold one key, so it is always clear who signs what.
+
+| Role | Held by | Holds | Signs |
+|:---:|:---:|:---:|:---:|
+| Certificate authority | the `dsce` repository | root private key (offline, never committed), root certificate | the end-entity certificate `eec.pem` |
+| End-entity signer (EEC) | this repository | EEC private key (CI secret `EEC_SECRET_KEY`), `eec.pem` | CMS detached signatures over plugin files |
+| Independent signer | plugin authors, omdsc-dev included | author key pair | bare-public-key detached signatures over plugin files |
+
+### Certificate chain
+
+Trust starts at the root certificate and ends at the bytes of a plugin file.
+
+```text
+dsce repository (root CA, offline)
+  root_ca.crt
+      │  issues
+      ▼
+  this repository's eec.pem (end-entity certificate)
+      │  openssl cms -sign -binary -outform DER
+      ▼
+  plugins/<author>/<plugin>/<x.y.z>/meta.json.sig
+  plugins/<author>/<plugin>/<x.y.z>/plugin.js.sig
+```
+
+| Item | Convention |
+|:---:|:---:|
+| Root CA key | ECDSA P-256, native OpenSSL PEM; browser WebCrypto supports P-256 most widely, the chain is verified in the browser, and Ed25519 is unavailable on the target browser floor |
+| Root certificate | X.509 self-signed, `keyUsage=critical,keyCertSign,cRLSign`, `basicConstraints=critical,CA:TRUE,pathlen:0`, valid 3650 days |
+| EEC key | ECDSA P-256 |
+| EEC certificate | issued by the root CA, `keyUsage=critical,digitalSignature`, `basicConstraints=critical,CA:FALSE`, valid 365 days |
+| Collection signature | CMS detached signature, `openssl cms -sign -binary -outform DER -nocerts -noattr` |
+| Author signature | bare-public-key detached signature, `openssl pkeyutl -sign -rawin`, Ed25519 author keys |
+
+The EEC must be ECDSA P-256, not Ed25519: OpenSSL's CMS implementation reports `provider signature failure` when signing with an Ed25519 key, so it is unusable in practice.
+
+### Author self-signatures
+
+Plugin authors are independent signers. They do not go through this repository and do not depend on the certificate chain. Authors sign plugin files with a bare-public-key detached signature, and this repository only files the artifacts and the public key as they arrive:
+
+- The author public key ships with the artifact and is stored as `plugins/<author>/author_pub.pem` (Ed25519, OpenSSL PEM).
+- The author's `plugin.js.sig` and `meta.json.sig` are stored as `plugin.js.author.sig` and `meta.json.author.sig`, so they coexist with the collection CMS signatures and the file name tells the signer apart.
+
+Author signatures are optional. When an author does not sign, that version carries only this repository's EEC signature.
+
+### Verification semantics
+
+- Verification before publishing is strict: `pnpm verify`, `pnpm build` and every CI step stop with a non-zero exit code on an error, so non-conforming content is never distributed.
+- Verification after distribution is lenient: when a web-file signature, a plugin signature or a certificate chain check fails, the plugin market only warns. It does not block, and it does not fall back to trusting anything. The user decides whether to continue.
+- Signatures cover raw file bytes. Any change to line endings, indentation or whitespace breaks verification, and the repository uses LF everywhere.
+
+### How to request an EEC
+
+The EEC of this collection must be requested from the dsce root CA. The certificate is issued by the root CA in the dsce repository; this repository cannot self-sign it, and cannot issue certificates for other collections.
+
+1. Generate the EEC private key and a certificate signing request (CSR) locally, with the collection name as `CN`:
+
+   ```bash
+   openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out eec_secret.pem
+   openssl req -new -key eec_secret.pem -out eec.csr -subj '/O=omdsc-dev/CN=dsc-inner-plugin'
+   ```
+
+2. Submit `eec.csr` to the dsce repository (the root CA maintainers), stating the purpose, the requested validity and a contact.
+3. Put the returned certificate in the repository root as `eec.pem`, replacing the placeholder.
+4. Put the contents of `eec_secret.pem` into the GitHub Actions secret `EEC_SECRET_KEY`. Never commit it.
+5. After merge, CI verifies the `eec.pem` chain against the root certificate. A broken chain, an expired certificate, or the wrong `keyUsage` or `basicConstraints` aborts the build.
+
+The root private key belongs to the offline environment of the dsce repository. Neither this repository nor its CI can or needs to reach it. The `eec.pem` currently in the repository is a placeholder: it was not issued by the root CA and must not be used for real signatures. Replace it before going live.
+
 ## Directory layout
 
-Distribution specification v2 is deliberately tightly coupled: manifests, keys, signatures and plugin payloads all live on one origin, which removes cross-origin injection paths.
+Distribution specification v2 is deliberately tightly coupled: manifests, certificates, signatures and plugin payloads all live on one origin, which removes cross-origin injection paths.
 
 ```text
 dsc-inner-plugin/
 ├── .github/
 │   ├── plugins-sources.json            source manifest, the only input that decides what is listed
 │   ├── plugins-sources.README.md       field reference for the manifest
-│   ├── scripts/import-plugins.mjs      build and import plugins from the manifest
-│   └── workflows/build-and-deploy.yml  verify, sign, commit distribution content, publish
+│   └── workflows/build-and-deploy.yml  import, verify the chain, sign, commit, publish
 ├── .gitattributes                      enforce LF line endings
 ├── .gitignore
 ├── LICENSE
 ├── README.md
 ├── README.en-US.md
+├── eec.pem                             end-entity certificate, replaced once the root CA issues it
 ├── meta.json                           collection metadata, download counting switch
-├── plugin_secret.pub                   collection public key, rewritten by CI from the private key
-├── plugin_set_sign.json                dsc trust signature for this collection
 ├── datalog.json                        plugin catalogue, keyed by plugin name
 ├── tags.json                           preset tags
 ├── package.json
@@ -66,19 +138,22 @@ dsc-inner-plugin/
 ├── plugins/
 │   ├── author_manifest.json            registered authors
 │   └── <author>/
-│       ├── plugin_secret.pub           that author public key
-│       ├── plugin_manifest.json        that author plugin list
+│       ├── author_pub.pem              that author's Ed25519 public key
+│       ├── plugin_manifest.json        that author's plugin list
 │       └── <plugin>/
 │           ├── versions.json           version list
 │           └── <x.y.z>/
 │               ├── meta.json           plugin runtime metadata
+│               ├── meta.json.sig       collection CMS signature
 │               ├── plugin.js           plugin runtime script
-│               └── plugin_sign.json    collection signature and author self-signature
+│               ├── plugin.js.sig       collection CMS signature
+│               └── plugin.js.author.sig  author bare-key signature (optional)
 └── scripts/
-    ├── sign.mjs                        Ed25519 hash-then-sign primitives
+    ├── pki.mjs                         OpenSSL PKI wrapper, shell calls only, no cryptography
     ├── lib/collection-verify.mjs       shared verification logic
     ├── build-collection.mjs            verify, sign and produce dist/
-    └── verify-collection.mjs           read-only consistency check
+    ├── verify-collection.mjs           read-only consistency check
+    └── import-plugins.mjs              build and import plugins from the manifest
 ```
 
 Naming rules and required files are in [plugins/README.md](plugins/README.md).
@@ -91,34 +166,18 @@ The root `meta.json` declares the download counting switch only:
 |:---:|:---:|:---:|
 | `DOWNLOAD_COUNT_ENABLE` | `false` | When `true`, the market fires one fire-and-forget POST per download and tells users this source counts downloads |
 | `DOWNLOAD_COUNT_API` | absent | Counting endpoint, required only when counting is on |
-| `API_NEED_IP` | `false` | Whether the counting request carries the caller public IP |
+| `API_NEED_IP` | `false` | Whether the counting request carries the caller's public IP |
 
 Counting is currently off for this collection.
-
-## Trust chain
-
-Three signing layers. Each layer signs only what the next one needs.
-
-| Layer | Signer | Private key | Signed object | Artifact |
-|:---:|:---:|:---:|:---:|:---:|
-| dsc | `dsc` | dsc key, never in this repository | bytes of the root `plugin_secret.pub` | `plugin_set_sign.json` |
-| Collection | `dsc-inner-plugin` | `PLUGIN_PRIVATE_KEY` | `meta.json` and `plugin.js` of every version | `plugin_sign.json` inside the version directory |
-| Author | author name | `AUTHOR_SIGN_PRIVATE_KEY` | same files, optional | appended to the same `plugin_sign.json` |
-
-- The market embeds the dsc public key. It validates `plugin_set_sign.json` first, trusts this collection `plugin_secret.pub` only after that, and then validates plugin signatures with it.
-- Delegation is not supported. This collection cannot issue a trust signature for another collection.
-- The algorithm is fixed to Ed25519 with hash-then-sign: SHA-512 over the file bytes, then sign the digest, base64 encoded.
-- Collection signatures and author self-signatures coexist in one `plugin_sign.json` and are told apart by the `signer` field. Author signatures verify against `plugins/<author>/plugin_secret.pub`, collection signatures against the root `plugin_secret.pub`.
-- A public key is always what the private key derives. CI derives it from `PLUGIN_PRIVATE_KEY` and overwrites `plugin_secret.pub`; the build fails when the derived key differs from the committed one.
 
 ## How to get a plugin listed
 
 1. Open a pull request against `.github/plugins-sources.json`, one entry per plugin, with `repo`, an optional `ref`, `author` and `plugin`. Fields are documented in [plugins-sources.README.md](.github/plugins-sources.README.md).
-2. After merge, CI clones or copies the source into `temp/`, runs `pnpm install --frozen-lockfile` and `pnpm build`, writes `dist/meta.json` and `dist/plugin.js` into `plugins/<author>/<plugin>/<version>/`, then updates that plugin `versions.json`, that author `plugin_manifest.json` and the root `datalog.json`. An author self-signature shipped in the artifact is preserved.
+2. After merge, CI clones or copies the source into `temp/`, runs `pnpm install --frozen-lockfile` and `pnpm build`, writes `dist/meta.json` and `dist/plugin.js` into `plugins/<author>/<plugin>/<version>/`, stores author-side detached signatures as `*.author.sig`, stores `dist/author_pub.pem` as `plugins/<author>/author_pub.pem`, then updates that plugin's `versions.json`, that author's `plugin_manifest.json` and the root `datalog.json`.
 3. Add tags by hand. New catalogue entries start with an empty `tag` array and need tags picked from `tags.json`. Undeclared tags are rejected by verification.
-4. Merge and distribute. CI signs `meta.json` and `plugin.js` of every version with `PLUGIN_PRIVATE_KEY`, keeps author self-signatures, commits the changes to `plugins/`, `plugin_secret.pub` and `datalog.json` back to the repository, and publishes `dist/` to Pages.
+4. Merge and distribute. CI resolves the root certificate, verifies the `eec.pem` chain with `openssl verify`, signs `meta.json` and `plugin.js` of every version with `EEC_SECRET_KEY`, re-verifies `dist/`, commits the changes to `plugins/` and `datalog.json` back to the repository, and publishes `dist/` to Pages.
 
-A failing step skips that one plugin and logs the reason; the rest still run.
+A failing import step skips that one plugin and logs the reason; the rest still run. A failing signing or verification step aborts the whole build.
 
 ## Preset tags
 
@@ -135,7 +194,7 @@ Tags must come from `tags.json`; undeclared tags are rejected by verification.
 
 ## How the plugin market consumes this collection
 
-The market reads collection metadata and the plugin catalogue first, then fetches version files by path. A single source usually gets several `base_url` entries: a mirrored CDN distribution service, `raw.githubusercontent.com`, and GitHub Pages, with the last two as fallbacks and a one second cap per request.
+The market reads collection metadata and the plugin catalogue first, then fetches version files and signatures by path, and finally anchors `eec.pem` in the root certificate. A single source usually gets several `base_url` entries: a mirrored CDN distribution service, `raw.githubusercontent.com`, and GitHub Pages, with the last two as fallbacks and a one second cap per request.
 
 | Step | Path | Purpose |
 |:---:|:---:|:---:|
@@ -144,10 +203,11 @@ The market reads collection metadata and the plugin catalogue first, then fetche
 | 3 | `<base_url>/plugins/<author>/<plugin>/versions.json` | Read the version list and the latest version |
 | 4 | `<base_url>/plugins/<author>/<plugin>/<x.y.z>/meta.json` | Read plugin metadata |
 | 5 | `<base_url>/plugins/<author>/<plugin>/<x.y.z>/plugin.js` | Read the runtime script |
-| 6 | `<base_url>/plugins/<author>/<plugin>/<x.y.z>/plugin_sign.json` | Read signatures for that version |
-| 7 | `<base_url>/plugin_set_sign.json` and `<base_url>/plugin_secret.pub` | Verify the source and obtain the collection public key |
+| 6 | `<base_url>/plugins/<author>/<plugin>/<x.y.z>/plugin.js.sig` and `meta.json.sig` | Read the collection CMS signatures |
+| 7 | `<base_url>/eec.pem` | Read the end-entity certificate and verify its chain against the root certificate |
+| 8 | `<base_url>/plugins/<author>/author_pub.pem` and `*.author.sig` | Read the author key and signatures when the version carries them |
 
-The market stores the source type, script URL, public key and signature in IndexedDB. This collection is recorded as source type `inner`; `source_url` holds the plugin script URL; `pub` and `sign` hold the public key and signature obtained on download, and are re-verified before every plugin run to catch tampering.
+The market stores the source type, script URL, certificate and signatures in IndexedDB. This collection is recorded as source type `inner`; `source_url` holds the plugin script URL; the certificate and signatures are re-verified before every plugin run to catch tampering. Any failed check produces a warning only and does not block loading.
 
 ## Cross-origin access
 
@@ -159,22 +219,29 @@ The specification requires cross-origin access limited to trusted origins, inclu
 
 ```bash
 pnpm install
-pnpm verify        # read-only consistency check, warns while the trust signature is empty
+pnpm verify        # read-only consistency check, chain and signatures degrade to warnings without a root certificate
 pnpm build         # writes dist/ once verification passes
 pnpm run import    # import plugins from the source manifest
 ```
 
-- `pnpm verify` and `pnpm build` fall back to skeleton mode with a warning while no dsc trust signature exists. With a dsc public key configured, `pnpm verify:strict` checks strictly; pass the key through `DSC_PUBLIC_KEY` or `--trust-public-key`.
-- Use `pnpm run import`. `pnpm import` is a built-in pnpm command, not the import script of this repository.
-- Run `pnpm sign` to sign plugins with `PLUGIN_PRIVATE_KEY` and produce `dist/`.
+- `pnpm verify` and `pnpm build` run in skeleton mode with warnings while no usable certificate chain exists, which suits an empty collection and local development. With a root certificate at hand, verify strictly:
+
+  ```bash
+  pnpm verify:strict --root-ca root_ca.crt
+  ROOT_CA_PATH=root_ca.crt pnpm verify:strict
+  ```
+
+- Use `pnpm run import`. `pnpm import` is a built-in pnpm command, not this repository's import script.
+- Run `pnpm sign --root-ca root_ca.crt` to produce CMS signatures with `EEC_SECRET_KEY` and emit `dist/`. It fails outright when the key does not match `eec.pem` or when no root certificate is supplied.
+- OpenSSL 3.0 or newer is required locally. The scripts only call the `openssl` command line and implement no cryptography themselves.
 
 ## Security notes
 
 - When a signature fails, the market warns the user and suggests downloading again. It does not run the plugin silently.
 - Being listed is not a certification. A signature proves the content matches its signer, not that the plugin behaviour was audited.
-- Keep private keys in CI secrets and local environment variables, never in the repository. `.gitignore` already excludes `.env`.
-- Replacing the collection key invalidates every trust signature dsc has issued, so a new one must be requested.
-- Signatures cover file bytes. Any change to line endings, indentation or whitespace breaks verification, and the repository uses LF everywhere.
+- Keep private keys in CI secrets and local environment variables, never in the repository. The EEC key lives in `EEC_SECRET_KEY`; the root private key never enters this repository. `.gitignore` already excludes `.env`.
+- Rotating the EEC key pair means replacing `eec.pem` and requesting a new certificate from dsce; CMS signatures made with the old certificate can no longer be verified.
+- Signatures cover file bytes. Any change to line endings, indentation or whitespace breaks verification, and the repository uses LF everywhere. Author artifacts must be LF too.
 - Minify plugin artifacts. It reduces size and removes meaningless whitespace differences.
 
 ## License
