@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "dsc 组织自研插件合集: 按分发规范 v2 收录、签名并分发插件",
+  "description": "dsc 背书的内部插件索引: 收录从 dsce 本体解耦出的可选内部插件,整站由 dsc 签名,插件由 dsc 作为作者签名",
   "license": "Apache-2.0",
   "homepage": "https://omdsc-dev.github.io/dsc-inner-plugin/",
   "repository": {
@@ -15,15 +15,15 @@
   },
   "scripts": {
     "import": "node scripts/import-plugins.mjs --manifest .github/plugins-sources.json",
-    "verify": "node scripts/verify-collection.mjs --dir . --allow-placeholder-eec",
-    "verify:strict": "node scripts/verify-collection.mjs --dir .",
-    "build": "node scripts/build-collection.mjs --dir . --allow-placeholder-eec --out dist",
-    "sign": "node scripts/build-collection.mjs --dir . --sign --out dist"
+    "verify": "node scripts/verify-collection.mjs --dir .",
+    "build": "node scripts/build-collection.mjs --dir . --out dist",
+    "sign": "node scripts/sign-site.mjs --dir dist",
+    "verify:site": "node scripts/verify-site.mjs --dir dist"
   },
   "keywords": [
     "dsc",
     "dsc-plugin",
-    "plugin-collection",
+    "plugin-index",
     "in-house",
     "openssl",
     "pki"

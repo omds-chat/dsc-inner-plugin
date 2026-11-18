@@ -3,14 +3,13 @@
  * 合集自洽性校验,供 CI 与开发者本地使用。
  *
  * 与 build-collection.mjs 共用 lib/collection-verify.mjs 的校验逻辑,只读不写。
- * 证书链与 CMS 签名校验需要根证书:用 --root-ca 指定,或设置环境变量 ROOT_CA_PATH。
+ * 校验范围是索引数据与作者签名,不需要证书链;整站签名由 verify-site.mjs 校验。
  *
  * 用法:
- *   node scripts/verify-collection.mjs --dir . --root-ca root_ca.crt
- *   ROOT_CA_PATH=root_ca.crt node scripts/verify-collection.mjs --dir .
- *   node scripts/verify-collection.mjs --dir template --allow-placeholder-eec
+ *   node scripts/verify-collection.mjs --dir .
+ *   node scripts/verify-collection.mjs --dir . --json
  */
-import { formatProblems, resolveRootCaPath, verifyCollection } from './lib/collection-verify.mjs'
+import { formatProblems, verifyCollection } from './lib/collection-verify.mjs'
 import { opensslVersion } from './pki.mjs'
 
 function usage() {
@@ -19,27 +18,15 @@ function usage() {
     '',
     '选项:',
     '  --dir <目录>                合集根目录,默认当前目录',
-    '  --root-ca <路径>            根证书路径,用于校验证书链与 CMS 签名',
-    '  --allow-placeholder-eec     骨架模式:根证书缺失或 eec.pem 未由根 CA 签发时只警告',
     '  --collection-name <名称>    合集名称,默认取合集目录名',
     '  --json                      以 JSON 输出校验结果',
     '  --help                      显示本说明',
-    '',
-    '环境变量:',
-    '  ROOT_CA_PATH                根证书路径,等价于 --root-ca',
     '',
   ].join('\n'))
 }
 
 function parseArgs(argv) {
-  const options = {
-    dir: '.',
-    rootCa: null,
-    allowPlaceholderEec: false,
-    collectionName: null,
-    json: false,
-    help: false,
-  }
+  const options = { dir: '.', collectionName: null, json: false, help: false }
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
     const separator = arg.indexOf('=')
@@ -54,8 +41,6 @@ function parseArgs(argv) {
     }
     switch (flag) {
       case '--dir': options.dir = take(); break
-      case '--root-ca': options.rootCa = take(); break
-      case '--allow-placeholder-eec': options.allowPlaceholderEec = true; break
       case '--collection-name': options.collectionName = take(); break
       case '--json': options.json = true; break
       case '--help':
@@ -91,15 +76,10 @@ function main() {
     return 2
   }
 
-  const rootCaPath = resolveRootCaPath(options)
-  const result = verifyCollection(options.dir, {
-    rootCaPath,
-    allowPlaceholderEec: options.allowPlaceholderEec,
-    collectionName: options.collectionName,
-  })
+  const result = verifyCollection(options.dir, { collectionName: options.collectionName })
 
   if (options.json) {
-    process.stdout.write(JSON.stringify({ ...result, rootCaPath }, null, 2) + '\n')
+    process.stdout.write(JSON.stringify(result, null, 2) + '\n')
   } else {
     if (result.problems.length > 0) process.stdout.write(formatProblems(result.problems) + '\n')
     const summary =

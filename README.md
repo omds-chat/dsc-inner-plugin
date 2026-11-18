@@ -1,38 +1,51 @@
 # dsc-inner-plugin
 
-omdsc-dev 组织自研的 dsc 插件合集。插件在这里按分发规范 v2 收录、签名并分发,插件市场读取本合集的清单、终端签名证书与签名来取用插件。
+dsc 背书的内部插件索引: 收录从 dsce 本体解耦出来的可选内部插件,整站由 dsc 签名发布。
 
 [English](README.en-US.md)
 
 ## 定位
 
-本仓库是一个插件合集,不是索引服务,也不提供静态站点页面: 分发内容就是合集本身,构建产物 `dist/` 直接部署到 GitHub Pages。
+本仓库是内部插件索引,不是社区合集,也不提供额外的索引服务: 分发内容就是索引本身,构建产物 `dist/` 直接部署到 GitHub Pages。
 
-- 与社区合集 [awesome-dsc-plugin](https://github.com/omdsc-dev/awesome-dsc-plugin) 是兄弟仓库。两者目录结构、校验脚本与签名体系完全一致,区别只在收录范围与预设标签。
-- 社区合集面向公开投稿;本合集只收录 omdsc-dev 组织自研的插件,不接受外部投稿。
-- 两个合集都通过同一条证书链取得信任: 都由 dsce 根 CA 签发终端签名证书。证书主体不同,私钥各自持有,签名不能互相顶替。
-- 收录不等于认证。本合集只保证分发内容与签名一致,不审查插件行为。
+- 收录对象是从 dsce 本体解耦出来的可选内部插件,由 dsc 自研维护,不面向第三方投稿。
+- 由 dsc 直接签名发布。市场校验本仓库时,校验的是本仓库 Pages 页面的签名数据(整站 CMS 签名与 `dist/eec.pem`),不是「合集 EEC 签发插件」那套。
+- 与 [awesome-dsc-plugin](https://github.com/omdsc-dev/awesome-dsc-plugin) 功能相似但结构不同: 那边是社区合集加 EEC 签插件;这边是 dsc 自己签整站,再由 dsc 作为作者签插件。
+- 内部插件本身可信,但仍要走 dsc-market 的普通安装通道(软安全门禁),所以产物必须可被独立校验。
+- 收录不等于认证。本仓库只保证分发内容与签名一致,不审查插件行为。
+
+## 与 awesome-dsc-plugin 的结构差异
+
+| 维度 | 本仓库 | awesome-dsc-plugin |
+|:---:|:---:|:---:|
+| 定位 | dsc 背书的内部插件索引 | 社区插件合集 |
+| 收录范围 | 从 dsce 解耦的可选内部插件,dsc 自研 | 社区投稿的第三方插件 |
+| 信任来源 | dsc 网页 EEC 签整站 | 合集 EEC 签插件文件 |
+| 插件文件签名 | dsc 作为作者签 `*.author.sig` | 作者自签 `*.author.sig`,合集再签 CMS |
+| 版本目录文件 | `meta.json`、`plugin.js`、作者签名 | `meta.json`、`plugin.js`、两份 CMS 签名、作者签名 |
+| 根目录证书 | 无,证书只出现在 `dist/` | `eec.pem` |
+| 市场校验顺序 | 先验 Pages 整站签名,再验作者签名 | 先验合集 EEC 链,再验插件签名 |
+| 安装通道 | dsc-market 普通通道,软安全门禁 | 同左 |
 
 ## 当前状态
 
-组织尚未发布可安装的同源插件,因此本合集为空合集,不含任何插件条目:
+组织尚未发布可安装的内部插件,因此本索引为空:
 
 | 文件 | 内容 |
 |:---:|:---:|
 | `datalog.json` | `[]` |
 | `plugins/author_manifest.json` | `[]` |
 | `.github/plugins-sources.json` | `[]` |
-| `eec.pem` | 占位证书,尚未由 dsce 根 CA 签发 |
+| 根目录 `eec.pem` | 不存在,网页 EEC 只在签名阶段注入 |
 
-空合集下 `pnpm verify` 与 `pnpm build` 以骨架模式通过,缺少根证书与证书链只给出警告。本仓库不编造插件条目。
-
-本合集尚未拿到 EEC: 组织目前只为 awesome-dsc-plugin 签发过终端签名证书。因此 CI 在「校验 eec.pem 证书链」这一步会失败,直到向 dsce 根 CA 申请到真实证书并覆盖 `eec.pem`。这是预期状态,不要为了跑通而跳过校验。
+空索引下 `pnpm verify` 与 `pnpm build` 直接通过,不需要任何证书。签名阶段需要网页 EEC 私钥与证书: 本地缺失时只警告并保留未签名 `dist/`,CI 缺失则直接失败。本仓库不编造插件条目。
 
 ## 收录条件
 
 只有同时满足以下条件的插件才会被收录:
 
 - 由 omdsc-dev 组织自研并维护,不接受第三方投稿。
+- 从 dsce 本体解耦,可以单独安装、单独停用,不要求 dsce 本体做配套改动。
 - 承诺不采集、不外传用户凭证与数据,不隐式发起网络请求,不读取与插件功能无关的会话内容。
 - 产物是单个浏览器 ESM 脚本,导出 `activate(context)`,不依赖 Node 内置模块与后端接口。
 - 提供可构建的源码仓库,`pnpm build` 能在 CI 中复核产物。
@@ -43,93 +56,99 @@ omdsc-dev 组织自研的 dsc 插件合集。插件在这里按分发规范 v2 �
 
 ## 签名与信任
 
-### 三个角色
+### 两层签名
 
-签名体系基于 OpenSSL PKI,由三个角色各持一把密钥,谁签发什么一目了然。
+本仓库的信任由两层签名构成,两层都由 dsc 签,但覆盖的对象与作用不同。
 
-| 角色 | 承担者 | 持有物 | 签发对象 |
-|:---:|:---:|:---:|:---:|
-| 根证书机构(CA) | `dsce` 仓库 | 根私钥(离线,不入库)、根证书 | 终端签名证书 `eec.pem` |
-| 终端签名方(EEC) | 本仓库 | EEC 私钥(CI secret `EEC_SECRET_KEY`)、`eec.pem` | 插件文件的 CMS 分离签名 |
-| 独立签名方 | 插件作者,含 omdsc-dev 自身 | 作者密钥对 | 插件文件的裸公钥分离签名 |
+| 层 | 签名者 | 密钥 | 覆盖对象 | 产物 |
+|:---:|:---:|:---:|:---:|:---:|
+| 整站签名 | dsc 网页签名方(EEC) | ECDSA P-256 | `dist/` 内全部 `.html`、`.js`、`.css`、`.json` 文件 | `<文件>.sig`、`web_files.json`、`web_files.json.sig`、`eec.pem` |
+| 作者签名 | dsc(作为插件作者) | Ed25519 | 每个版本的 `meta.json` 与 `plugin.js` | `meta.json.author.sig`、`plugin.js.author.sig` |
+
+两层都要,是因为它们回答两个不同的问题:
+
+- 整站签名回答「这份 Pages 页面是不是 dsc 发布的」。`datalog.json`、`versions.json`、各 `meta.json` 决定市场显示什么,它们同样被签名,篡改索引会立刻让校验失败。
+- 作者签名回答「这个插件文件是不是 dsc 写的」。即使文件被搬到别处、脱离本站分发,作者公钥仍然能独立校验它。
 
 ### 证书链
 
-信任从根证书开始,一路收到插件文件的字节。
+信任从根证书开始,一路收到网页文件的字节。
 
 ```text
-dsce 仓库(根 CA,离线)
+omdsc-dev 根 CA(离线;root_ca.crt 由 online-data 分支分发)
   root_ca.crt
       │  签发
       ▼
-  本仓库 eec.pem(终端签名证书 EEC)
+dsc 网页 EEC(CI secrets:WEB_EEC_KEY / WEB_EEC_CERT)
       │  openssl cms -sign -binary -outform DER
       ▼
-  plugins/<author>/<plugin>/<x.y.z>/meta.json.sig
-  plugins/<author>/<plugin>/<x.y.z>/plugin.js.sig
+dist/<文件>.sig
+dist/web_files.json.sig
 ```
 
 | 项 | 约定 |
 |:---:|:---:|
 | 根 CA 密钥 | ECDSA P-256,OpenSSL 原生 PEM;浏览器 WebCrypto 对 P-256 支持最广,证书链要在浏览器里校验,Ed25519 在目标浏览器下限不可用 |
 | 根证书 | X.509 自签名,`keyUsage=critical,keyCertSign,cRLSign`,`basicConstraints=critical,CA:TRUE,pathlen:0`,有效期 3650 天 |
-| EEC 密钥 | ECDSA P-256 |
-| EEC 证书 | 由根 CA 签发,`keyUsage=critical,digitalSignature`,`basicConstraints=critical,CA:FALSE`,有效期 365 天 |
-| 合集签名 | CMS 分离签名,`openssl cms -sign -binary -outform DER -nocerts -noattr` |
+| 网页 EEC 密钥 | ECDSA P-256 |
+| 网页 EEC 证书 | 由根 CA 签发,`keyUsage=critical,digitalSignature`,`basicConstraints=critical,CA:FALSE`,有效期 365 天 |
+| 整站签名 | CMS 分离签名,`openssl cms -sign -binary -outform DER -nocerts -noattr`,逐文件写出 `<文件>.sig` |
 | 作者签名 | 裸公钥分离签名,`openssl pkeyutl -sign -rawin`,作者密钥为 Ed25519 |
 
-EEC 必须用 ECDSA P-256,不能用 Ed25519:OpenSSL 的 CMS 实现对 Ed25519 私钥签名报 `provider signature failure`,实测不可用。
+网页 EEC 必须用 ECDSA P-256,不能用 Ed25519: OpenSSL 的 CMS 实现对 Ed25519 私钥签名报 `provider signature failure`,实测不可用。
 
-### 作者自签名
+整站签名只签 `.html`、`.js`、`.css`、`.json` 四类文件。`eec.pem` 是证书本身,由市场直接读取;作者签名 `*.author.sig` 不被整站签名覆盖,它有自己的验证链。
 
-插件作者是独立签名方,不经本仓库,也不依赖证书链。作者用裸公钥分离签名给插件文件签名,本仓库只负责把产物与公钥原样收录:
+### 作者签名
+
+dsc 同时是插件作者,用 Ed25519 裸公钥给每个版本的 `meta.json` 与 `plugin.js` 签名:
 
 - 作者公钥随产物提供,收录为 `plugins/<author>/author_pub.pem`(Ed25519,OpenSSL PEM)。
-- 作者的 `plugin.js.sig` 与 `meta.json.sig` 收录为 `plugin.js.author.sig` 与 `meta.json.author.sig`,与合集的 CMS 签名并存,文件名区分签名者。
+- 作者的 `plugin.js.sig` 与 `meta.json.sig` 收录为 `plugin.js.author.sig` 与 `meta.json.author.sig`,文件名带 `author` 后缀,与整站签名区分。
+- 作者签名是可选项,但对 dsc 自研插件是默认项。缺少作者签名时校验只警告,该版本仍受整站签名覆盖。
 
-作者签名是可选项。作者不签名时,该版本只有本仓库的 EEC 签名。
+### 市场如何校验本来源
 
-### 校验语义
+市场读索引、取文件、验签的顺序如下。任何一步失败只警告,不阻断,也不静默放行。
 
-- 本仓库发布前的校验是强校验:`pnpm verify`、`pnpm build`、CI 的每一步遇到错误都以非零退出码中止,不合规的内容不会被分发。
-- 分发出去之后的校验是弱校验:插件市场对网页文件签名、插件签名、证书链校验失败只警告,不阻断,不做兜底。警告由用户决定是否继续,市场不会替用户静默放行。
-- 签名覆盖文件原始字节。换行、缩进或空白的任何改动都会让校验失败,仓库统一使用 LF。
+| 步骤 | 路径 | 用途 |
+|:---:|:---:|:---:|
+| 1 | `<base_url>/eec.pem` | 取 dsc 网页签名证书 |
+| 2 | `<base_url>/web_files.json` 与 `web_files.json.sig` | 取签名清单,先校验清单签名 |
+| 3 | `<base_url>/<文件>.sig` | 用清单列出的文件逐个校验 CMS 签名 |
+| 4 | `<base_url>/datalog.json`、`versions.json`、各 `meta.json` | 索引数据,已在上一步验签,据此显示插件与版本 |
+| 5 | `<base_url>/plugins/<author>/author_pub.pem` 与 `*.author.sig` | 校验插件作者签名 |
+| 6 | `<base_url>/plugins/<author>/<plugin>/<x.y.z>/plugin.js` | 取运行时脚本,已在上一步验签 |
 
-### 如何申请 EEC
+证书链的信任锚不在本仓库,而在 `online-data` 分支: 市场从 `index.json` 读取 `rootCa` 指向的 `root_ca.crt` 作为锚点,再用它校验 `dist/eec.pem`。本仓库只负责把签名数据发布到 Pages。
 
-本合集的 EEC 需向 dsce 根 CA 申请。EEC 证书由 dsce 仓库的根证书机构签发,本仓库不能自签,也不能为其他合集签发。
+同一个来源通常配置多个 `base_url`,依次是自动同步的 CDN 分发服务、`raw.githubusercontent.com`、GitHub Pages,后两者做兜底,单次请求最多等待 1 秒。市场把来源类型、脚本地址、证书与签名一并存入 IndexedDB,本索引的来源类型记为 `inner`;证书与签名在每次预运行插件前重新校验,防止篡改。
 
-1. 本地生成 EEC 私钥与证书签名请求(CSR),`CN` 取合集名:
+### 软安全门禁
 
-   ```bash
-   openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out eec_secret.pem
-   openssl req -new -key eec_secret.pem -out eec.csr -subj '/O=omdsc-dev/CN=dsc-inner-plugin'
-   ```
+内部插件本身可信: 由 dsc 自研,与 dsce 同源解耦,不经过第三方。但「可信」不等于「免检」:
 
-2. 把 `eec.csr` 提交给 dsce 仓库(根 CA 维护方),说明用途、有效期与联系人。
-3. 拿回签发好的证书,覆盖本仓库根目录的 `eec.pem`。
-4. 把 `eec_secret.pem` 的内容放入 GitHub Actions secret `EEC_SECRET_KEY`,不要提交到仓库。
-5. 合并后 CI 用根证书校验 `eec.pem` 的签发链,链不通、证书过期、`keyUsage` 或 `basicConstraints` 不符都会中止构建。
+- 仍然走 dsc-market 的普通安装通道,和第三方插件一样要过签名校验,没有快捷通道。
+- 整站签名失败、作者签名失败或证书链不通时,市场警告用户并建议重新下载,不会静默运行。
+- 门禁是软的: 失败只警告,不阻断,也不做兜底信任。是否继续由用户决定,市场不替用户做判断。
 
-根证书私钥属于 dsce 仓库的离线环境,本仓库与 CI 都拿不到,也不需要。仓库内现在的 `eec.pem` 是占位证书,不是由根 CA 签发,也不能用于任何真实签名,上线前必须覆盖。
+这条设计的代价是明确的: 一个被篡改的插件仍可能被用户在警告之后装上。收益同样明确: 校验链路不依赖市场对某个来源的硬编码信任,换源、镜像、离线安装都能用同一套验签逻辑。
 
 ## 目录结构
 
-分发规范 v2 的高耦合结构: 清单数据、证书、签名与插件本体全部归属同站,避免跨域来源注入。
+源码仓库只放索引数据与作者材料,不放任何证书。
 
 ```text
 dsc-inner-plugin/
 ├── .github/
 │   ├── plugins-sources.json            收录来源清单,改这里就是改收录结果
-│   ├── plugins-sources.README.md       清单字段说明
-│   └── workflows/build-and-deploy.yml  收录、校验证书链、签名、提交分发内容并发布
+│   └── workflows/build-and-deploy.yml  收录、校验、构建、整站签名并发布
 ├── .gitattributes                      统一 LF 换行
 ├── .gitignore
 ├── LICENSE
 ├── README.md
 ├── README.en-US.md
-├── eec.pem                             终端签名证书,由 dsce 根 CA 签发后覆盖
-├── meta.json                           合集元数据,含下载计数开关
+├── meta.json                           索引元数据,含下载计数开关
 ├── datalog.json                        插件目录,以插件名称为唯一键
 ├── tags.json                           预设标签
 ├── package.json
@@ -144,21 +163,24 @@ dsc-inner-plugin/
 │           ├── versions.json           版本列表
 │           └── <x.y.z>/
 │               ├── meta.json           插件运行时元数据
-│               ├── meta.json.sig       合集 CMS 签名
+│               ├── meta.json.author.sig  作者裸公钥签名(可选)
 │               ├── plugin.js           插件运行时脚本
-│               ├── plugin.js.sig       合集 CMS 签名
 │               └── plugin.js.author.sig  作者裸公钥签名(可选)
 └── scripts/
     ├── pki.mjs                         OpenSSL PKI 封装,只调用命令行不做密码学
     ├── lib/collection-verify.mjs       两个脚本共用的校验逻辑
-    ├── build-collection.mjs            校验、签名并生成 dist/
+    ├── build-collection.mjs            校验并生成 dist/
     ├── verify-collection.mjs           只读自洽性校验
+    ├── sign-site.mjs                   对 dist/ 做整站 CMS 签名
+    ├── verify-site.mjs                 校验 dist/ 的整站签名
     └── import-plugins.mjs              按来源清单构建并收录插件
 ```
 
+构建产物 `dist/` 在源码目录之外多出四类内容: `eec.pem`、每个被签名文件的 `.sig`、`web_files.json` 与 `web_files.json.sig`。
+
 目录命名与必需文件见 [plugins/README.md](plugins/README.md)。
 
-## 合集元数据
+## 索引元数据
 
 根目录 `meta.json` 只声明下载计数的开关:
 
@@ -168,20 +190,20 @@ dsc-inner-plugin/
 | `DOWNLOAD_COUNT_API` | 缺省 | 计数接口地址,仅在启用计数时需要 |
 | `API_NEED_IP` | `false` | 计数请求是否携带请求来源的公网 IP |
 
-本合集当前不启用下载计数。
+本索引当前不启用下载计数。
 
 ## 收录流程
 
-1. 提交 PR 修改 `.github/plugins-sources.json`,每个插件一项,写明 `repo`、可选的 `ref`、`author` 与 `plugin`。字段见 [plugins-sources.README.md](.github/plugins-sources.README.md)。
+1. 提交 PR 修改 `.github/plugins-sources.json`,每个插件一项,写明 `repo`、可选的 `ref`、`author` 与 `plugin`。
 2. 合并后 CI 依次执行: 克隆或复制源码到 `temp/`、`pnpm install --frozen-lockfile`、`pnpm build`、把 `dist/meta.json` 与 `dist/plugin.js` 写入 `plugins/<author>/<plugin>/<version>/`、把作者侧分离签名落为 `*.author.sig`、把 `dist/author_pub.pem` 落为 `plugins/<author>/author_pub.pem`,再更新该插件的 `versions.json`、该作者的 `plugin_manifest.json` 与根目录 `datalog.json`。
 3. 人工补充标签。新条目在 `datalog.json` 里的 `tag` 初始为空数组,需要从 `tags.json` 的预设标签中挑选后提交。未在 `tags.json` 中声明的标签会被校验拒绝。
-4. 合并并分发。CI 解析根证书、用 `openssl verify` 校验 `eec.pem` 链、用 `EEC_SECRET_KEY` 为每个版本的 `meta.json` 与 `plugin.js` 生成 CMS 签名、对 `dist/` 再校验一遍,然后把 `plugins/` 与 `datalog.json` 的变更提交回仓库,同时把 `dist/` 发布到 Pages。
+4. 构建与发布。CI 依次执行 `pnpm verify`(自洽性校验,不涉及证书链)、`pnpm build`(生成 `dist/`)、`scripts/sign-site.mjs`(用 `secrets.WEB_EEC_KEY` 做整站签名)、`scripts/verify-site.mjs`(签名自检),最后把 `dist/` 发布到 Pages。
 
-收录环节任何一步失败只跳过该插件并在日志里写明原因,其余插件照常处理。签名与校验环节失败则整个构建中止。
+收录环节任何一步失败只跳过该插件并在日志里写明原因,其余插件照常处理。校验、构建与签名环节失败则整个构建中止。
 
 ## 预设标签
 
-`tags.json` 是本合集的标签表,取组织自研视角,与社区合集的预设标签不同:
+`tags.json` 是本索引的标签表,取组织自研视角,与社区合集的预设标签不同:
 
 | 标签 | 含义 |
 |:---:|:---:|
@@ -192,26 +214,9 @@ dsc-inner-plugin/
 
 标签必须从 `tags.json` 中取,未声明的标签会被校验拒绝。
 
-## 插件市场如何消费本合集
-
-市场先读合集元数据与插件目录,再按路径取各版本文件与签名,最后用根证书把 `eec.pem` 收进信任锚。同一个来源通常配置多个 `base_url`,依次是自动同步的 CDN 分发服务、`raw.githubusercontent.com`、GitHub Pages,后两者做兜底,单次请求最多等待 1 秒。
-
-| 步骤 | 路径 | 用途 |
-|:---:|:---:|:---:|
-| 1 | `<base_url>/meta.json` | 判断该来源是否启用下载计数 |
-| 2 | `<base_url>/datalog.json` | 列出全部插件、作者与标签 |
-| 3 | `<base_url>/plugins/<author>/<plugin>/versions.json` | 取版本列表与最新版本号 |
-| 4 | `<base_url>/plugins/<author>/<plugin>/<x.y.z>/meta.json` | 取插件元数据 |
-| 5 | `<base_url>/plugins/<author>/<plugin>/<x.y.z>/plugin.js` | 取插件运行时脚本 |
-| 6 | `<base_url>/plugins/<author>/<plugin>/<x.y.z>/plugin.js.sig` 与 `meta.json.sig` | 取合集 CMS 签名 |
-| 7 | `<base_url>/eec.pem` | 取终端签名证书,用根证书校验证书链 |
-| 8 | `<base_url>/plugins/<author>/author_pub.pem` 与 `*.author.sig` | 有作者签名时,取作者公钥与签名 |
-
-市场把来源类型、脚本地址、证书与签名一并存入 IndexedDB。本合集的来源类型记为 `inner`;`source_url` 存插件脚本地址;证书与签名在每次预运行插件前重新校验,防止篡改。任何一项校验失败只提示警告,不阻断插件加载。
-
 ## 跨域访问
 
-本合集托管在 GitHub Pages。Pages 对静态资源默认返回 `Access-Control-Allow-Origin: *`,因此上表中三个 `base_url` 天然可以被跨域读取,无法在托管侧把来源收窄到白名单。这是托管平台的既定行为,不是本仓库的配置。
+本索引托管在 GitHub Pages。Pages 对静态资源默认返回 `Access-Control-Allow-Origin: *`,因此上表中的 `base_url` 天然可以被跨域读取,无法在托管侧把来源收窄到白名单。这是托管平台的既定行为,不是本仓库的配置。
 
 规范要求跨域来源仅开放信任的来源,至少包含 `https://omdsc-dev.github.io`。若把分发内容改放到其他托管,需要自行配置 CORS 白名单,至少放行该来源。
 
@@ -219,28 +224,26 @@ dsc-inner-plugin/
 
 ```bash
 pnpm install
-pnpm verify        # 只读自洽性校验,无根证书时证书链与签名降级为警告
-pnpm build         # 校验通过后生成 dist/
-pnpm run import    # 按来源清单收录插件
+pnpm verify                  # 只读自洽性校验,不需要证书
+pnpm build                   # 校验通过后生成 dist/
+pnpm sign -- --eec web-eec.pem   # 需要 WEB_EEC_KEY,对 dist/ 做整站签名
+pnpm verify:site -- --root-ca root_ca.crt   # 校验 dist/ 的整站签名
+pnpm run import              # 按来源清单收录插件
 ```
 
-- `pnpm verify` 与 `pnpm build` 在合集尚无可用证书链时按骨架模式放行并警告,适合空合集与本地开发。拿到根证书后可做严格校验:
-
-  ```bash
-  pnpm verify:strict --root-ca root_ca.crt
-  ROOT_CA_PATH=root_ca.crt pnpm verify:strict
-  ```
-
+- `pnpm verify` 与 `pnpm build` 不涉及任何证书,空索引也能直接通过。
+- 整站签名需要网页 EEC 私钥。私钥从环境变量 `WEB_EEC_KEY` 读取,证书用 `--eec` 或 `WEB_EEC_CERT` 指定,两者都可以是 PEM 文本或文件路径。
+- 缺少私钥或证书时 `sign-site.mjs` 只警告并保留未签名 `dist/`,方便本地调试;CI 传 `--require-key`,把这种缺失当错误。
+- `verify-site.mjs` 给出 `--root-ca` 时做完整证书链校验,不给时只做签名完整性校验。
 - 收录请用 `pnpm run import`。`pnpm import` 是 pnpm 自带命令,不是本仓库的收录脚本。
-- 需要给插件签名时运行 `pnpm sign --root-ca root_ca.crt`,它会用 `EEC_SECRET_KEY` 生成 CMS 签名并产出 `dist/`。私钥与 `eec.pem` 不配对、或没有提供根证书时直接失败。
 - 本机需要 OpenSSL 3.0 及以上,脚本只调用 `openssl` 命令行,不实现任何密码学运算。
 
 ## 安全提示
 
 - 签名不通过时插件市场会警告用户并建议重新下载,不会静默运行。
 - 收录不等于认证。签名只证明分发内容与签名者一致,不代表插件行为经过审查。
-- 私钥只放 CI secrets 与本地环境变量,不要提交。EEC 私钥放在 `EEC_SECRET_KEY`,根证书私钥永远不进本仓库。`.gitignore` 已排除 `.env`。
-- 更换 EEC 密钥对必须同时换 `eec.pem` 并向 dsce 重新申请签发;旧证书签出的 CMS 签名将无法再验证。
+- 私钥只放 CI secrets 与本地环境变量,不要提交。网页 EEC 私钥放在 `WEB_EEC_KEY`;根证书私钥永远不进本仓库,也不进 CI。`.gitignore` 已排除 `.env`。
+- 更换网页 EEC 密钥对必须同时更新 `WEB_EEC_KEY` 与 `WEB_EEC_CERT`,并同步 `online-data` 分支的 `eec.pem`;旧证书签出的 CMS 签名将无法再验证。
 - 签名覆盖文件字节。换行、缩进或空白的任何改动都会让校验失败,仓库统一使用 LF,作者产物也必须是 LF。
 - 插件产物建议行压缩,既减小体积,也避免无意义的空白差异。
 

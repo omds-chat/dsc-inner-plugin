@@ -9,15 +9,16 @@ on:
       - 'scripts/**'
       - '.github/**'
       - 'meta.json'
-      - 'eec.pem'
+      - 'datalog.json'
+      - 'tags.json'
   release:
     types:
       - published
   workflow_dispatch:
 
-# 需要写权限,因为分发内容会被提交回仓库;Pages 与 OIDC 令牌供发布步骤使用。
+# Pages 与 OIDC 令牌供发布步骤使用;本流程不再把分发内容提交回仓库,因此不需要写权限。
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -25,18 +26,20 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
-# 本仓库是终端签名方(EEC),但 EEC 尚未签发: 组织目前只为 awesome-dsc-plugin 签发过证书。
-# 本合集的 eec.pem 需向 dsce 根 CA 申请,申请流程见 README 的签名章节。
-# 在拿到真实证书之前,本流程会在「校验 eec.pem 证书链」这一步失败,这是预期状态:
-# 不要为了跑通而跳过校验,也不要用自签证书替代。
-# 私钥只有两个来源:
-#   secrets.EEC_SECRET_KEY  终端签名证书私钥(ECDSA P-256),只在本流程内存中出现;
-#   secrets.ROOT_CA_PEM     根证书 PEM,用于校验证书链,不是私钥。
-# 根证书私钥属于 dsce 仓库的离线环境,绝不出现在本流程。
+# 本仓库由 dsc 直接签名发布,信任分两层:
+#   1. 整站签名: 用网页 EEC 给 dist/ 内每个 .html/.js/.css/.json 文件签 CMS 分离签名,
+#      市场校验的是本仓库 Pages 页面的签名数据,而不是「合集 EEC 签发插件」那套;
+#   2. 作者签名: dsc 作为插件作者用 Ed25519 给每个版本的 meta.json 与 plugin.js 签 *.author.sig。
+#
+# 私钥只来自 secrets:
+#   secrets.WEB_EEC_KEY   网页 EEC 私钥(ECDSA P-256),只在本流程内存中出现;
+#   secrets.WEB_EEC_CERT  网页 EEC 证书 PEM 文本,公开材料,随 dist/eec.pem 分发;
+#   secrets.ROOT_CA_PEM   根证书 PEM 文本,可选,用于签名后自检证书链。
+# 根证书私钥属于离线签名环境,绝不出现在本流程。
 env:
-  EEC_SECRET_KEY: ${{ secrets.EEC_SECRET_KEY }}
+  WEB_EEC_KEY: ${{ secrets.WEB_EEC_KEY }}
+  WEB_EEC_CERT: ${{ secrets.WEB_EEC_CERT }}
   ROOT_CA_PEM: ${{ secrets.ROOT_CA_PEM }}
-  ROOT_CA_URL: ${{ vars.ROOT_CA_URL }}
 
 jobs:
   build:
@@ -65,63 +68,49 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # 按 .github/plugins-sources.json 收录插件;清单为空时脚本直接返回 0。
-      # 收录只复制作者侧分离签名(落为 <文件>.author.sig)与作者公钥,不生成合集签名。
+      # 收录只复制作者侧分离签名(落为 <文件>.author.sig)与作者公钥,不生成任何合集签名。
       - name: Import plugins
         run: node scripts/import-plugins.mjs --manifest .github/plugins-sources.json
 
-      # 根证书二选一,优先级从高到低:
-      #   1. secrets.ROOT_CA_PEM  根证书 PEM 文本,适合不便公开拉取的场景;
-      #   2. vars.ROOT_CA_URL     根证书下载地址,默认取 online-data 分支的 root_ca.crt。
-      - name: Resolve root CA
+      # 自洽性校验: 索引数据、作者公钥、作者签名与版本目录结构。
+      # 这一步不涉及证书链: 插件文件不再由合集 EEC 签名,整站签名在下面的步骤里做。
+      - name: Verify collection
+        run: pnpm verify
+
+      - name: Build distribution
+        run: pnpm build
+
+      # 整站签名: 用网页 EEC 给 dist/ 内全部 .html/.js/.css/.json 文件签 CMS 分离签名,
+      # 产出 <文件>.sig、web_files.json 及其签名,并把证书复制为 dist/eec.pem。
+      # 本地缺少密钥时 sign-site.mjs 只警告并保留未签名 dist;CI 用 --require-key 视为错误。
+      - name: Sign site
         run: |
           set -euo pipefail
-          target="$RUNNER_TEMP/root_ca.crt"
-          if [ -n "${ROOT_CA_PEM:-}" ]; then
-            printf '%s\n' "$ROOT_CA_PEM" > "$target"
-            echo "根证书来源: secrets.ROOT_CA_PEM"
-          elif [ -n "${ROOT_CA_URL:-}" ]; then
-            curl -fsSL "$ROOT_CA_URL" -o "$target"
-            echo "根证书来源: $ROOT_CA_URL"
-          else
-            echo "::error::缺少根证书,请设置 secrets.ROOT_CA_PEM 或 vars.ROOT_CA_URL"
+          if [ -z "${WEB_EEC_KEY:-}" ]; then
+            echo "::error::缺少 secrets.WEB_EEC_KEY,无法对 dist/ 做整站签名"
             exit 1
           fi
-          echo "ROOT_CA_PATH=$target" >> "$GITHUB_ENV"
+          if [ -z "${WEB_EEC_CERT:-}" ]; then
+            echo "::error::缺少 secrets.WEB_EEC_CERT,需要网页 EEC 证书 PEM 文本"
+            exit 1
+          fi
+          cert="$RUNNER_TEMP/web-eec.pem"
+          printf '%s\n' "$WEB_EEC_CERT" > "$cert"
+          node scripts/sign-site.mjs --dir dist --eec "$cert" --require-key
 
-      # 强校验: 合集根目录的 eec.pem 必须由该根证书签发,且未过期、
-      # keyUsage 含 digitalSignature、basicConstraints 为 CA:FALSE。
-      # 本仓库的 eec.pem 目前是占位证书,这一步会失败,直到拿到 dsce 根 CA 签发的真实证书。
-      - name: Verify EEC against root CA
+      # 发布前自检: 清单签名、逐文件签名、清单覆盖率与孤儿签名。
+      # 有根证书时同时校验网页 EEC 的证书链,没有时只做完整性校验并给出警告。
+      - name: Verify site signatures
         run: |
           set -euo pipefail
-          openssl verify -CAfile "$ROOT_CA_PATH" eec.pem
-          openssl x509 -in eec.pem -noout -subject -issuer -enddate
-          openssl x509 -in eec.pem -noout -ext keyUsage
-          openssl x509 -in eec.pem -noout -ext basicConstraints
-          openssl x509 -in eec.pem -noout -checkend 0
-
-      # 用 EEC 私钥为每个版本的 meta.json 与 plugin.js 生成 CMS 分离签名,并生成 dist/。
-      # 私钥只从 secret 注入,且必须与仓库内的 eec.pem 配对,否则步骤直接失败。
-      - name: Build distribution
-        run: node scripts/build-collection.mjs --dir . --root-ca "$ROOT_CA_PATH" --sign --out dist
-
-      # 对即将分发的产物再做一次完整校验: 证书链、CMS 签名、作者签名、清单与版本目录。
-      - name: Verify distribution
-        run: node scripts/verify-collection.mjs --dir dist --root-ca "$ROOT_CA_PATH"
-
-      # 把构建结果提交回仓库,让开发者本地也能拿到最新的分发内容与签名。
-      # eec.pem 由申请人手工提交,不由本流程写入。
-      - name: Commit distribution changes
-        run: |
-          git config user.name 'github-actions'
-          git config user.email 'github-actions@github.com'
-          git add plugins datalog.json
-          if git diff --cached --quiet; then
-            echo 'distribution content unchanged'
-            exit 0
+          if [ -n "${ROOT_CA_PEM:-}" ]; then
+            root="$RUNNER_TEMP/root_ca.crt"
+            printf '%s\n' "$ROOT_CA_PEM" > "$root"
+            node scripts/verify-site.mjs --dir dist --root-ca "$root"
+          else
+            echo "::warning::未设置 secrets.ROOT_CA_PEM,只做签名完整性校验,未验证证书链"
+            node scripts/verify-site.mjs --dir dist
           fi
-          git commit -m 'chore(dist): refresh plugin distribution content'
-          git push
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

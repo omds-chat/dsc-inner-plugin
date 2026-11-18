@@ -9,7 +9,7 @@
  * 与旧版 JSON 签名实现的差别:不再处理 plugin_sign.json 与 plugin_secret.pub,
  * 改为复制作者侧分离签名(plugin.js.sig 与 meta.json.sig 分别落为
  * plugin.js.author.sig 与 meta.json.author.sig),以及作者公钥 dist/author_pub.pem
- * 到 plugins/<author>/author_pub.pem。合集 CMS 签名由 build-collection.mjs --sign 生成。
+ * 到 plugins/<author>/author_pub.pem。整站签名由 sign-site.mjs 在 dist/ 上生成,收录阶段不做签名。
  *
  * 用法:
  *   node scripts/import-plugins.mjs
@@ -364,7 +364,7 @@ async function importOne(item, label, options) {
       logWarning('plugins/' + author + '/' + AUTHOR_PUB_TARGET + ' 不存在,作者签名将无法校验')
     }
     if (copiedSignatures.length === 0) {
-      log('  插件未带作者签名,该版本只有合集 CMS 签名')
+      log('  插件未带作者签名,该版本只有整站签名')
     }
 
     const staged = [planVersions(pluginDir, version), planPluginManifest(author, plugin), planDatalog(plugin, author)]

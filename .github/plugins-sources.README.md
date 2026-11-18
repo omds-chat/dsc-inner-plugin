@@ -2,7 +2,7 @@
 
 `.github/plugins-sources.json` 是 CI 收录插件时读取的唯一输入。改这个文件就是改收录结果,提交 PR 即可申请收录。
 
-文件内容是数组,每个元素描述一个插件来源。当前为空数组,表示合集尚未收录任何插件。
+文件内容是数组,每个元素描述一个插件来源。当前为空数组,表示本索引尚未收录任何插件。
 
 ## 字段
 
@@ -50,7 +50,7 @@
 6. 更新该插件的 `versions.json`、该作者的 `plugin_manifest.json`、根目录 `datalog.json`。
 7. 删除 `temp/import/` 内的临时目录。
 
-收录本身不生成合集签名。合集 CMS 签名(`plugin.js.sig` 与 `meta.json.sig`)由 `scripts/build-collection.mjs --sign` 用本仓库 EEC 统一生成。
+收录本身不生成任何签名。插件文件的整站签名由 `scripts/sign-site.mjs` 在构建产物 `dist/` 上生成: 每个 `.html`、`.js`、`.css`、`.json` 文件写出 `<文件>.sig`,并汇总为 `web_files.json` 与其签名。
 
 任何一步失败,该插件被跳过并在日志中写明原因,其余插件照常处理,流程退出码保持 0。
 

@@ -10,8 +10,9 @@
  *   (浏览器 WebCrypto 对 P-256 支持最广;证书链校验要在浏览器里做,Ed25519 在目标浏览器下限不可用)
  * - EEC 密钥 ECDSA P-256;OpenSSL 的 CMS 实现对 Ed25519 报 provider signature failure,不可用
  * - EEC 证书 keyUsage=critical,digitalSignature,basicConstraints=critical,CA:FALSE
- * - 合集签名 openssl cms -sign -binary -outform DER -nocerts -noattr,产出逐字节语义的 DER 格式 CMS 分离签名
+ * - 网页签名 openssl cms -sign -binary -outform DER -nocerts -noattr,产出逐字节语义的 DER 格式 CMS 分离签名
  *   DER 是跨仓库统一格式:默认的 S/MIME multipart/signed 包装浏览器无法解析,插件市场要在浏览器里验签
+ *   本仓库只用它签整站产物(见 sign-site.mjs),不再用它给插件文件生成合集签名
  * - 作者签名 openssl pkeyutl -sign -rawin(Ed25519),产出裸公钥分离签名
  */
 import { execFileSync } from 'node:child_process'
@@ -23,7 +24,7 @@ import { dirname, join, resolve } from 'node:path'
 export const ROOT_CA_FILE = 'root_ca.crt'
 /** 根 CA 私钥文件名,只在签名环境使用,不入库 */
 export const ROOT_CA_KEY_FILE = 'root_secret.pem'
-/** 合集根目录的终端签名证书文件名 */
+/** 网页终端签名证书文件名,签名后随 dist 一并分发 */
 export const EEC_CERT_FILE = 'eec.pem'
 /** EEC 私钥文件名,只从 CI secret 读取 */
 export const EEC_KEY_FILE = 'eec_secret.pem'
@@ -33,8 +34,14 @@ export const EEC_CSR_FILE = 'eec.csr'
 export const AUTHOR_KEY_FILE = 'author_secret.pem'
 /** 作者公钥文件名,随合集分发 */
 export const AUTHOR_PUB_FILE = 'author_pub.pem'
-/** 版本目录内必须由 EEC 签名的文件 */
+/** 版本目录内可带作者签名的文件 */
 export const VERSION_SIGNED_FILES = ['meta.json', 'plugin.js']
+/** 整站签名覆盖的扩展名: 代码与索引数据全部纳入 */
+export const SITE_SIGNED_EXTENSIONS = ['.html', '.js', '.css', '.json']
+/** 整站签名清单文件名,记录本次签名的全部文件 */
+export const WEB_MANIFEST_FILE = 'web_files.json'
+/** 整站签名清单结构版本 */
+export const WEB_MANIFEST_SCHEMA = 1
 /** 需要的最低 OpenSSL 主版本号 */
 export const MIN_OPENSSL_MAJOR = 3
 
@@ -301,6 +308,28 @@ export function verifyFileCms(filePath, sigPath, rootCertPath, eecCertPath) {
   if (!existsSync(eecCertPath)) return { ok: false, reason: 'EEC 证书不存在:' + eecCertPath }
   const result = run(
     ['cms', '-verify', '-binary', '-inform', 'DER', '-in', sigPath, '-content', filePath, '-CAfile', rootCertPath, '-certfile', eecCertPath],
+    { allowFailure: true },
+  )
+  if (result.ok) return { ok: true, reason: null }
+  return { ok: false, reason: head(result.stderr || result.stdout, 2) || 'openssl cms -verify 失败' }
+}
+
+/**
+ * 只校验 CMS 分离签名的完整性,不校验证书链(-noverify)。
+ * 用于本地没有根证书时的快速自检:能发现内容被篡改,但不能证明签名者是谁。
+ * 签名用 -nocerts 生成,签名结构里没有签名者证书,因此必须用 -certfile 传入 EEC 证书,
+ * 否则 openssl 会报 signer certificate not found;-noverify 只跳过证书链校验,不跳过证书查找。
+ * @param {string} filePath 被签名文件
+ * @param {string} sigPath 签名文件
+ * @param {string} eecCertPath EEC 证书
+ * @returns {{ok: boolean, reason: string|null}}
+ */
+export function verifyFileCmsNoChain(filePath, sigPath, eecCertPath) {
+  if (!existsSync(filePath)) return { ok: false, reason: '被签名文件不存在:' + filePath }
+  if (!existsSync(sigPath)) return { ok: false, reason: '签名文件不存在:' + sigPath }
+  if (!existsSync(eecCertPath)) return { ok: false, reason: 'EEC 证书不存在:' + eecCertPath }
+  const result = run(
+    ['cms', '-verify', '-binary', '-inform', 'DER', '-in', sigPath, '-content', filePath, '-certfile', eecCertPath, '-noverify'],
     { allowFailure: true },
   )
   if (result.ok) return { ok: true, reason: null }

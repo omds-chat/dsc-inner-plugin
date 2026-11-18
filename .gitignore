@@ -9,3 +9,6 @@ temp/
 AGENTS.md
 .agent/
 .agents/
+
+# Single-branch worktrees
+single-branch/
