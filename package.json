@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "dsc 背书的内部插件索引: 收录从 dsce 本体解耦出的可选内部插件,整站由 dsc 签名,插件由 dsc 作为作者签名",
+  "description": "dsc 背书的内部插件索引: 收录从 DeepSeek-Chat-Enhanced 本体解耦出的可选内部插件,整站由 dsc 签名,插件由 dsc 作为作者签名",
   "license": "Apache-2.0",
   "homepage": "https://omdsc-dev.github.io/dsc-inner-plugin/",
   "repository": {
