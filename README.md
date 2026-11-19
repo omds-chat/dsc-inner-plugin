@@ -33,7 +33,7 @@ dsc 背书的内部插件索引: 收录从 DeepSeek-Chat-Enhanced 本体解耦�
 
 | 文件 | 内容 |
 |:---:|:---:|
-| `datalog.json` | 插件目录,每个条目的 `plugin_name` 唯一 |
+| `plugins.json` | 插件目录索引,每个条目的 `plugin_name` 唯一 |
 | `plugins/author_manifest.json` | 已登记的作者 |
 | `.github/plugins-sources.json` | 收录来源清单,空数组表示未收录插件 |
 | 根目录 `eec.pem` | 不存在;网页 EEC 证书只在签名阶段写入 `dist/` |
@@ -67,7 +67,7 @@ dsc 背书的内部插件索引: 收录从 DeepSeek-Chat-Enhanced 本体解耦�
 
 两层都要,是因为它们回答两个不同的问题:
 
-- 整站签名回答「这份 Pages 页面是不是 dsc 发布的」。`datalog.json`、`versions.json`、各 `meta.json` 决定市场显示什么,它们同样被签名,篡改索引会立刻让校验失败。
+- 整站签名回答「这份 Pages 页面是不是 dsc 发布的」。`plugins.json`、`versions.json`、各 `meta.json` 决定市场显示什么,它们同样被签名,篡改索引会立刻让校验失败。
 - 作者签名回答「这个插件文件是不是 dsc 写的」。即使文件被搬到别处、脱离本站分发,作者公钥仍然能独立校验它。
 
 ### 证书链
@@ -116,7 +116,7 @@ dsc 同时是插件作者,用 Ed25519 裸公钥给每个版本的 `meta.json` �
 | 1 | `<base_url>/eec.pem` | 取 dsc 网页签名证书 |
 | 2 | `<base_url>/web_files.json` 与 `web_files.json.sig` | 取签名清单,先校验清单签名 |
 | 3 | `<base_url>/<文件>.sig` | 用清单列出的文件逐个校验 CMS 签名 |
-| 4 | `<base_url>/datalog.json`、`plugins/<author>/<plugin>/versions.json`、各 `meta.json` | 索引数据,已在上一步验签,据此显示插件与版本 |
+| 4 | `<base_url>/plugins.json`、`plugins/<author>/<plugin>/versions.json`、各 `meta.json` | 索引数据,已在上一步验签,据此显示插件与版本 |
 | 5 | `<base_url>/plugins/<author>/author_pub.pem` 与 `*.author.sig` | 校验插件作者签名 |
 | 6 | `<base_url>/plugins/<author>/<plugin>/<x.y.z>/plugin.js` | 取运行时脚本,已在上一步验签 |
 
@@ -150,7 +150,7 @@ dsc-inner-plugin/
 ├── README.md
 ├── README.en-US.md
 ├── meta.json                           索引元数据,含下载计数开关
-├── datalog.json                        插件目录,每个条目的 plugin_name 唯一
+├── plugins.json                        插件目录索引,每个条目的 plugin_name 唯一
 ├── tags.json                           预设标签
 ├── package.json
 ├── pnpm-lock.yaml
@@ -177,7 +177,7 @@ dsc-inner-plugin/
     └── import-plugins.mjs              按来源清单构建并收录插件
 ```
 
-构建产物 `dist/` 复制根目录的 `meta.json`、`datalog.json`、`tags.json` 与 `plugins/`,并写出 `build-info.json` 作为分发索引;签名阶段再追加 `eec.pem`、每个被签名文件的 `.sig`、`web_files.json` 与 `web_files.json.sig`。
+构建产物 `dist/` 复制根目录的 `meta.json`、`plugins.json`、`tags.json` 与 `plugins/`,并写出 `build-info.json` 作为分发索引;签名阶段再追加 `eec.pem`、每个被签名文件的 `.sig`、`web_files.json` 与 `web_files.json.sig`。
 
 目录命名与必需文件见 [plugins/README.md](plugins/README.md)。
 
@@ -196,8 +196,8 @@ dsc-inner-plugin/
 ## 收录流程
 
 1. 由组织维护者提交 PR 修改 `.github/plugins-sources.json`,每个插件一项,写明 `repo`、可选的 `ref`、`author` 与 `plugin`。字段与收录规则见 [.github/plugins-sources.README.md](.github/plugins-sources.README.md)。
-2. 合并后 CI 依次执行: 克隆或复制源码到 `temp/import/`、`pnpm install --frozen-lockfile`、`pnpm build`、把 `dist/meta.json` 与 `dist/plugin.js` 写入 `plugins/<author>/<plugin>/<version>/`、把作者侧分离签名落为 `*.author.sig`、把 `dist/author_pub.pem` 落为 `plugins/<author>/author_pub.pem`,再更新该插件的 `versions.json`、该作者的 `plugin_manifest.json` 与根目录 `datalog.json`。
-3. 人工补充标签。新条目在 `datalog.json` 里的 `tag` 初始为空数组,需要从 `tags.json` 的预设标签中挑选后提交。未在 `tags.json` 中声明的标签会被校验拒绝。
+2. 合并后 CI 依次执行: 克隆或复制源码到 `temp/import/`、`pnpm install --frozen-lockfile`、`pnpm build`、把 `dist/meta.json` 与 `dist/plugin.js` 写入 `plugins/<author>/<plugin>/<version>/`、把作者侧分离签名落为 `*.author.sig`、把 `dist/author_pub.pem` 落为 `plugins/<author>/author_pub.pem`,再更新该插件的 `versions.json`、该作者的 `plugin_manifest.json` 与根目录 `plugins.json`。
+3. 人工补充标签。新条目在 `plugins.json` 里的 `tag` 初始为空数组,需要从 `tags.json` 的预设标签中挑选后提交。未在 `tags.json` 中声明的标签会被校验拒绝。
 4. 构建与发布。CI 依次执行 `pnpm verify`(自洽性校验,不涉及证书链)、`pnpm build`(生成 `dist/`)、`scripts/sign-site.mjs`(用 `secrets.WEB_EEC_KEY` 做整站签名)、`scripts/verify-site.mjs`(签名自检),最后把 `dist/` 发布到 Pages。
 
 收录环节任何一步失败只跳过该插件并在日志里写明原因,其余插件照常处理。校验、构建与签名环节失败则整个构建中止。

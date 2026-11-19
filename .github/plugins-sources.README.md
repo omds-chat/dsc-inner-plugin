@@ -47,7 +47,7 @@
 4. 若 `dist/` 内存在作者侧分离签名,按下面的对应关系一并复制,保留作者签名:
    `dist/plugin.js.sig` 落为 `plugin.js.author.sig`,`dist/meta.json.sig` 落为 `meta.json.author.sig`。
 5. 若 `dist/` 内存在 `author_pub.pem`,复制为 `plugins/<author>/author_pub.pem`。
-6. 更新该插件的 `versions.json`、该作者的 `plugin_manifest.json`、根目录 `datalog.json`。
+6. 更新该插件的 `versions.json`、该作者的 `plugin_manifest.json`、根目录 `plugins.json`。
 7. 删除 `temp/import/` 内的临时目录。
 
 收录本身不生成任何签名。插件文件的整站签名由 `scripts/sign-site.mjs` 在构建产物 `dist/` 上生成: 每个 `.html`、`.js`、`.css`、`.json` 文件写出 `<文件>.sig`,并汇总为 `web_files.json` 与其签名。
@@ -56,4 +56,4 @@
 
 ## 收录之后
 
-新条目在 `datalog.json` 里的 `tag` 初始为空数组。标签需要人工从根目录 `tags.json` 的预设标签中挑选后补上,校验脚本会拒绝未在 `tags.json` 中声明的标签。
+新条目在 `plugins.json` 里的 `tag` 初始为空数组。标签需要人工从根目录 `tags.json` 的预设标签中挑选后补上,校验脚本会拒绝未在 `tags.json` 中声明的标签。

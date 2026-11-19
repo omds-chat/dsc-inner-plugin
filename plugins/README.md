@@ -8,7 +8,7 @@
 
 `plugins/<author>/`
 
-- 目录名即作者英文名称,必须与 `datalog.json` 的 `author`、`plugins/author_manifest.json` 的 `username` 完全一致。
+- 目录名即作者英文名称,必须与 `plugins.json` 的 `author`、`plugins/author_manifest.json` 的 `username` 完全一致。
 - 仅允许小写字母、数字、连字符,不得以连字符开头或结尾,最长 39 字符。
 - 作者目录内有两个文件:
   - `plugin_manifest.json`:该作者的插件名数组,例如 `["dsc-demo"]`,必需。
@@ -56,7 +56,7 @@
 
 | 字段 | 类型 | 说明 |
 |:---:|:---:|:---:|
-| `name` | string | 插件名,与 `datalog.json` 的 `plugin_name` 一致 |
+| `name` | string | 插件名,与 `plugins.json` 的 `plugin_name` 一致 |
 | `version` | string | 三段语义化版本号,与目录名一致 |
 | `license` | string | SPDX 标识符,例如 MIT |
 | `description` | object | 至少包含 `zh-CN` 或 `en-US` 之一 |
@@ -64,7 +64,7 @@
 | `repo_link` | string | 源码仓库链接 |
 | `dependencies` | object | 仅允许 `dsc` 一个键,值为 semver range |
 
-本仓库的校验只强制 `name` 与 `version`:前者必须与 `datalog.json` 的 `plugin_name` 一致,后者必须与版本目录名一致。其余字段服务于插件运行时与市场展示,索引校验不检查它们。
+本仓库的校验只强制 `name` 与 `version`:前者必须与 `plugins.json` 的 `plugin_name` 一致,后者必须与版本目录名一致。其余字段服务于插件运行时与市场展示,索引校验不检查它们。
 
 ## 目录示例
 
@@ -82,4 +82,4 @@ plugins/
         plugin.js.author.sig
 ```
 
-源码目录不含证书:根目录只有 `meta.json`、`datalog.json`、`tags.json` 三个索引文件,含义见根目录 [README](../README.md)。网页 EEC 证书只在签名阶段进入 `dist/`,不进入源码仓库。
+源码目录不含证书:根目录只有 `meta.json`、`plugins.json`、`tags.json` 三个索引文件,含义见根目录 [README](../README.md)。网页 EEC 证书只在签名阶段进入 `dist/`,不进入源码仓库。

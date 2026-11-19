@@ -18,7 +18,7 @@ import { formatProblems, verifyCollection } from './lib/collection-verify.mjs'
 import { requireOpenssl } from './pki.mjs'
 
 /** 根目录内随 dist 分发的文件 */
-const ROOT_DIST_FILES = ['meta.json', 'datalog.json', 'tags.json']
+const ROOT_DIST_FILES = ['meta.json', 'plugins.json', 'tags.json']
 
 function usage() {
   process.stdout.write([
@@ -84,17 +84,17 @@ function copyTree(srcDir, destDir) {
 }
 
 function collectIndex(root) {
-  const datalogPath = join(root, 'datalog.json')
-  if (!existsSync(datalogPath)) return []
-  let datalog
+  const pluginsIndexPath = join(root, 'plugins.json')
+  if (!existsSync(pluginsIndexPath)) return []
+  let pluginsIndex
   try {
-    datalog = readJson(datalogPath)
+    pluginsIndex = readJson(pluginsIndexPath)
   } catch {
     return []
   }
-  if (!Array.isArray(datalog)) return []
+  if (!Array.isArray(pluginsIndex)) return []
   const index = []
-  for (const entry of datalog) {
+  for (const entry of pluginsIndex) {
     if (typeof entry !== 'object' || entry === null) continue
     if (typeof entry.plugin_name !== 'string' || typeof entry.author !== 'string') continue
     const dirName = entry.plugin_name.split('/').pop()

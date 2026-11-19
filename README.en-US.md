@@ -33,7 +33,7 @@ Index content comes only from the data files and the `plugins/` directory; no pl
 
 | File | Content |
 |:---:|:---:|
-| `datalog.json` | plugin catalogue, unique `plugin_name` per entry |
+| `plugins.json` | plugin directory index, unique `plugin_name` per entry |
 | `plugins/author_manifest.json` | registered authors |
 | `.github/plugins-sources.json` | source manifest, an empty array means no plugin is listed |
 | root `eec.pem` | absent; the web EEC certificate enters `dist/` only at signing time |
@@ -67,7 +67,7 @@ Trust here is built from two layers. Both are signed by dsc, but they cover diff
 
 Both layers are needed because they answer two different questions:
 
-- The site-wide signature answers "was this Pages site published by dsc". `datalog.json`, `versions.json` and every `meta.json` decide what the market displays, so they are signed too, and tampering with the index fails verification immediately.
+- The site-wide signature answers "was this Pages site published by dsc". `plugins.json`, `versions.json` and every `meta.json` decide what the market displays, so they are signed too, and tampering with the index fails verification immediately.
 - The author signature answers "was this plugin file written by dsc". Even if the file is copied elsewhere and distributed off this site, the author public key still verifies it independently.
 
 ### Certificate chain
@@ -116,7 +116,7 @@ The market reads the index, fetches files and verifies signatures in this order.
 | 1 | `<base_url>/eec.pem` | read the dsc web signing certificate |
 | 2 | `<base_url>/web_files.json` and `web_files.json.sig` | read the signed manifest and verify the manifest signature first |
 | 3 | `<base_url>/<file>.sig` | verify the CMS signature of every file listed in the manifest |
-| 4 | `<base_url>/datalog.json`, `plugins/<author>/<plugin>/versions.json`, every `meta.json` | index data, already verified in the previous step, drives what the market displays |
+| 4 | `<base_url>/plugins.json`, `plugins/<author>/<plugin>/versions.json`, every `meta.json` | index data, already verified in the previous step, drives what the market displays |
 | 5 | `<base_url>/plugins/<author>/author_pub.pem` and `*.author.sig` | verify the plugin author signature |
 | 6 | `<base_url>/plugins/<author>/<plugin>/<x.y.z>/plugin.js` | read the runtime script, verified in the previous step |
 
@@ -150,7 +150,7 @@ dsc-inner-plugin/
 ├── README.md
 ├── README.en-US.md
 ├── meta.json                           index metadata, download counting switch
-├── datalog.json                        plugin catalogue, unique plugin_name per entry
+├── plugins.json                        plugin directory index, unique plugin_name per entry
 ├── tags.json                           preset tags
 ├── package.json
 ├── pnpm-lock.yaml
@@ -177,7 +177,7 @@ dsc-inner-plugin/
     └── import-plugins.mjs              build and import plugins from the manifest
 ```
 
-The build output `dist/` copies `meta.json`, `datalog.json`, `tags.json` and `plugins/` from the repository root and writes `build-info.json` as the distribution index; the signing stage then adds `eec.pem`, one `.sig` per signed file, `web_files.json` and `web_files.json.sig`.
+The build output `dist/` copies `meta.json`, `plugins.json`, `tags.json` and `plugins/` from the repository root and writes `build-info.json` as the distribution index; the signing stage then adds `eec.pem`, one `.sig` per signed file, `web_files.json` and `web_files.json.sig`.
 
 Naming rules and required files are in [plugins/README.md](plugins/README.md).
 
@@ -196,8 +196,8 @@ Counting is off for this index.
 ## How to get a plugin listed
 
 1. An organisation maintainer opens a pull request against `.github/plugins-sources.json`, one entry per plugin, with `repo`, an optional `ref`, `author` and `plugin`. Field and import rules are in [.github/plugins-sources.README.md](.github/plugins-sources.README.md).
-2. After merge, CI clones or copies the source into `temp/import/`, runs `pnpm install --frozen-lockfile` and `pnpm build`, writes `dist/meta.json` and `dist/plugin.js` into `plugins/<author>/<plugin>/<version>/`, stores author-side detached signatures as `*.author.sig`, stores `dist/author_pub.pem` as `plugins/<author>/author_pub.pem`, then updates that plugin's `versions.json`, that author's `plugin_manifest.json` and the root `datalog.json`.
-3. Add tags by hand. New catalogue entries start with an empty `tag` array and need tags picked from `tags.json`. Undeclared tags are rejected by verification.
+2. After merge, CI clones or copies the source into `temp/import/`, runs `pnpm install --frozen-lockfile` and `pnpm build`, writes `dist/meta.json` and `dist/plugin.js` into `plugins/<author>/<plugin>/<version>/`, stores author-side detached signatures as `*.author.sig`, stores `dist/author_pub.pem` as `plugins/<author>/author_pub.pem`, then updates that plugin's `versions.json`, that author's `plugin_manifest.json` and the root `plugins.json`.
+3. Add tags by hand. New index entries start with an empty `tag` array and need tags picked from `tags.json`. Undeclared tags are rejected by verification.
 4. Build and publish. CI runs `pnpm verify` (consistency check, no certificate chain involved), `pnpm build` (produce `dist/`), `scripts/sign-site.mjs` (site-wide signing with `secrets.WEB_EEC_KEY`) and `scripts/verify-site.mjs` (signature self-check), then publishes `dist/` to Pages.
 
 A failing import step skips that one plugin and logs the reason; the rest still run. A failing verification, build or signing step aborts the whole build.

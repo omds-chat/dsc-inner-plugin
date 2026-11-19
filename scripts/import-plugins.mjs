@@ -239,10 +239,10 @@ function planPluginManifest(author, plugin) {
   return { path, value: names }
 }
 
-function planDatalog(plugin, author) {
-  const path = join(ROOT_DIR, 'datalog.json')
-  const current = existsSync(path) ? readJson(path, 'datalog.json') : []
-  if (!Array.isArray(current)) throw new Error('datalog.json 的顶层必须是数组')
+function planPluginsIndex(plugin, author) {
+  const path = join(ROOT_DIR, 'plugins.json')
+  const current = existsSync(path) ? readJson(path, 'plugins.json') : []
+  if (!Array.isArray(current)) throw new Error('plugins.json 的顶层必须是数组')
   const next = []
   let replaced = false
   for (const entry of current) {
@@ -367,7 +367,7 @@ async function importOne(item, label, options) {
       log('  插件未带作者签名,该版本只有整站签名')
     }
 
-    const staged = [planVersions(pluginDir, version), planPluginManifest(author, plugin), planDatalog(plugin, author)]
+    const staged = [planVersions(pluginDir, version), planPluginManifest(author, plugin), planPluginsIndex(plugin, author)]
     // 未给出 profile 时不写作者清单,避免登记一条没有主页的条目;校验脚本会就此给出警告。
     if (profile) staged.push(planAuthorManifest(author, profile))
 

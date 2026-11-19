@@ -23,7 +23,7 @@ import {
 } from '../pki.mjs'
 
 /** 合集根目录必需的文件 */
-export const ROOT_REQUIRED_FILES = ['meta.json', 'datalog.json']
+export const ROOT_REQUIRED_FILES = ['meta.json', 'plugins.json']
 /** 版本目录内必需的文件,作者签名不在其中 */
 export const VERSION_REQUIRED_FILES = ['meta.json', 'plugin.js']
 /** 作者目录内的公钥文件名 */
@@ -159,42 +159,42 @@ export function verifyCollection(collectionDir, options = {}) {
     }
   }
 
-  // 四、插件目录 datalog.json
-  const datalogPath = join(root, 'datalog.json')
-  const datalog = isFile(datalogPath) ? parseJsonFile(datalogPath, 'datalog.json', report) : undefined
+  // 四、插件目录索引 plugins.json
+  const pluginsIndexPath = join(root, 'plugins.json')
+  const pluginsIndex = isFile(pluginsIndexPath) ? parseJsonFile(pluginsIndexPath, 'plugins.json', report) : undefined
   const entries = []
-  if (datalog !== undefined) {
-    if (!Array.isArray(datalog)) {
-      report.error('DATALOG_INVALID', 'datalog.json 的顶层必须是数组', 'datalog.json')
+  if (pluginsIndex !== undefined) {
+    if (!Array.isArray(pluginsIndex)) {
+      report.error('PLUGINS_INDEX_INVALID', 'plugins.json 的顶层必须是数组', 'plugins.json')
     } else {
       const seenNames = new Set()
-      for (const [index, entry] of datalog.entries()) {
-        const label = 'datalog.json 第 ' + index + ' 项'
+      for (const [index, entry] of pluginsIndex.entries()) {
+        const label = 'plugins.json 第 ' + index + ' 项'
         if (!isObject(entry)) {
-          report.error('DATALOG_INVALID', label + ' 必须是对象', 'datalog.json')
+          report.error('PLUGINS_INDEX_INVALID', label + ' 必须是对象', 'plugins.json')
           continue
         }
         if (typeof entry.plugin_name !== 'string' || !PLUGIN_NAME_PATTERN.test(entry.plugin_name)) {
-          report.error('DATALOG_INVALID', label + ' 的 plugin_name 不是合法的插件名', 'datalog.json')
+          report.error('PLUGINS_INDEX_INVALID', label + ' 的 plugin_name 不是合法的插件名', 'plugins.json')
           continue
         }
         if (typeof entry.author !== 'string' || entry.author.length === 0) {
-          report.error('DATALOG_INVALID', label + ' 的 author 必须是非空字符串', 'datalog.json')
+          report.error('PLUGINS_INDEX_INVALID', label + ' 的 author 必须是非空字符串', 'plugins.json')
           continue
         }
         if (!Array.isArray(entry.tag) || entry.tag.some((tag) => typeof tag !== 'string' || tag.length === 0)) {
-          report.error('DATALOG_INVALID', label + ' 的 tag 必须是字符串数组', 'datalog.json')
+          report.error('PLUGINS_INDEX_INVALID', label + ' 的 tag 必须是字符串数组', 'plugins.json')
           continue
         }
         if (seenNames.has(entry.plugin_name)) {
-          report.error('DATALOG_DUPLICATE', '插件名 ' + entry.plugin_name + ' 在 datalog.json 中重复出现', 'datalog.json')
+          report.error('PLUGINS_INDEX_DUPLICATE', '插件名 ' + entry.plugin_name + ' 在 plugins.json 中重复出现', 'plugins.json')
           continue
         }
         seenNames.add(entry.plugin_name)
         if (tagSet) {
           for (const tag of entry.tag) {
             if (!tagSet.has(tag)) {
-              report.error('TAG_NOT_DECLARED', '插件 ' + entry.plugin_name + ' 的标签 ' + tag + ' 未在 tags.json 中声明', 'datalog.json')
+              report.error('TAG_NOT_DECLARED', '插件 ' + entry.plugin_name + ' 的标签 ' + tag + ' 未在 tags.json 中声明', 'plugins.json')
             }
           }
         }
@@ -373,7 +373,7 @@ function inspectVersionMeta({ versionDir, versionRel, version, pluginName, repor
     return
   }
   if (meta.name !== pluginName) {
-    report.error('PLUGIN_META_MISMATCH', versionRel + '/meta.json 的 name 为 ' + JSON.stringify(meta.name) + ',与 datalog.json 的 ' + pluginName + ' 不一致', versionRel + '/meta.json')
+    report.error('PLUGIN_META_MISMATCH', versionRel + '/meta.json 的 name 为 ' + JSON.stringify(meta.name) + ',与 plugins.json 的 ' + pluginName + ' 不一致', versionRel + '/meta.json')
   }
   if (meta.version !== version) {
     report.error('PLUGIN_META_MISMATCH', versionRel + '/meta.json 的 version 为 ' + JSON.stringify(meta.version) + ',与目录名 ' + version + ' 不一致', versionRel + '/meta.json')
