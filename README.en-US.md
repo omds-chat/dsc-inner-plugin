@@ -208,7 +208,7 @@ A failing import step skips that one plugin and logs the reason; the rest still 
 
 | Tag | Meaning |
 |:---:|:---:|
-| `core` | base capabilities that work together with dsc itself |
+| `core` | base capabilities that work together with DeepSeek-Chat-Enhanced itself |
 | `ui` | interface and interaction enhancements |
 | `market` | plugin market and distribution topics |
 | `tooling` | development, debugging and build tools |
@@ -217,7 +217,7 @@ Tags must come from `tags.json`; undeclared tags are rejected by verification.
 
 ## Cross-origin access
 
-This index is hosted on GitHub Pages. Pages serves static assets with `Access-Control-Allow-Origin: *` by default, so the `base_url` entries above are readable cross-origin, and the host side cannot narrow the allowed origins to a whitelist. That is platform behaviour, not a setting of this repository.
+This index is hosted on GitHub Pages. Pages serves static assets with `Access-Control-Allow-Origin: *` by default, so the `base_url` used in the verification steps above is readable cross-origin, and the host side cannot narrow the allowed origins to a whitelist. That is platform behaviour, not a setting of this repository.
 
 The specification requires cross-origin access limited to trusted origins, including `https://omdsc-dev.github.io` at the very least. If distribution is moved to another host, configure a CORS whitelist there that allows that origin at minimum.
 
@@ -233,7 +233,7 @@ pnpm run import              # import plugins from the source manifest
 ```
 
 - `pnpm verify` and `pnpm build` involve no certificate and pass on an empty index.
-- Site-wide signing needs the web EEC private key. The key is read from the `WEB_EEC_KEY` environment variable; the certificate comes from `--eec` or `WEB_EEC_CERT`. Both accept PEM text or a file path.
+- Site-wide signing needs the web EEC private key. The key comes from `--key` or the `WEB_EEC_KEY` environment variable; the certificate comes from `--eec` or `WEB_EEC_CERT`. Both accept PEM text or a file path.
 - When the key or the certificate is missing, `sign-site.mjs` only warns and keeps an unsigned `dist/`, which suits local debugging. CI passes `--require-key` and treats the same condition as an error.
 - `verify-site.mjs` verifies the full certificate chain when `--root-ca` is given, and only checks signature integrity otherwise.
 - Use `pnpm run import`. `pnpm import` is a built-in pnpm command, not this repository's import script.

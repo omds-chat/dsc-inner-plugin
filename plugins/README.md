@@ -16,7 +16,7 @@
 
 作者公钥由插件构建产物 `dist/author_pub.pem` 随收录流程复制进来,不要在索引里手工生成。缺失时校验只给警告,该作者的插件便不能带作者签名。
 
-本索引的作者即 dsc 组织自身,作者目录通常只有 `omdsc-dev` 一个。
+本索引的作者是 omdsc-dev 组织自身,作者目录为 `omdsc-dev`。
 
 ## 插件目录
 
@@ -63,6 +63,8 @@
 | `author` | string | 作者名 |
 | `repo_link` | string | 源码仓库链接 |
 | `dependencies` | object | 仅允许 `dsc` 一个键,值为 semver range |
+
+本仓库的校验只强制 `name` 与 `version`:前者必须与 `datalog.json` 的 `plugin_name` 一致,后者必须与版本目录名一致。其余字段服务于插件运行时与市场展示,索引校验不检查它们。
 
 ## 目录示例
 

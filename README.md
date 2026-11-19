@@ -208,7 +208,7 @@ dsc-inner-plugin/
 
 | 标签 | 含义 |
 |:---:|:---:|
-| `core` | 与 dsc 本体协同的基础能力 |
+| `core` | 与 DeepSeek-Chat-Enhanced 本体协同的基础能力 |
 | `ui` | 界面与交互增强 |
 | `market` | 插件市场与分发相关 |
 | `tooling` | 开发、调试与构建工具 |
@@ -217,7 +217,7 @@ dsc-inner-plugin/
 
 ## 跨域访问
 
-本索引托管在 GitHub Pages。Pages 对静态资源默认返回 `Access-Control-Allow-Origin: *`,因此上表中的 `base_url` 天然可以被跨域读取,无法在托管侧把来源收窄到白名单。这是托管平台的既定行为,不是本仓库的配置。
+本索引托管在 GitHub Pages。Pages 对静态资源默认返回 `Access-Control-Allow-Origin: *`,因此上文验签步骤中的 `base_url` 天然可以被跨域读取,无法在托管侧把来源收窄到白名单。这是托管平台的既定行为,不是本仓库的配置。
 
 规范要求跨域来源仅开放信任的来源,至少包含 `https://omdsc-dev.github.io`。若把分发内容改放到其他托管,需要自行配置 CORS 白名单,至少放行该来源。
 
@@ -233,7 +233,7 @@ pnpm run import              # 按来源清单收录插件
 ```
 
 - `pnpm verify` 与 `pnpm build` 不涉及任何证书,空索引也能直接通过。
-- 整站签名需要网页 EEC 私钥。私钥从环境变量 `WEB_EEC_KEY` 读取,证书用 `--eec` 或 `WEB_EEC_CERT` 指定,两者都可以是 PEM 文本或文件路径。
+- 整站签名需要网页 EEC 私钥。私钥用 `--key` 或环境变量 `WEB_EEC_KEY` 指定,证书用 `--eec` 或 `WEB_EEC_CERT` 指定,两者都可以是 PEM 文本或文件路径。
 - 缺少私钥或证书时 `sign-site.mjs` 只警告并保留未签名 `dist/`,方便本地调试;CI 传 `--require-key`,把这种缺失当错误。
 - `verify-site.mjs` 给出 `--root-ca` 时做完整证书链校验,不给时只做签名完整性校验。
 - 收录请用 `pnpm run import`。`pnpm import` 是 pnpm 自带命令,不是本仓库的收录脚本。
