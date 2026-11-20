@@ -13,7 +13,9 @@
  * - 网页签名 openssl cms -sign -binary -outform DER -nocerts -noattr,产出逐字节语义的 DER 格式 CMS 分离签名
  *   DER 是跨仓库统一格式:默认的 S/MIME multipart/signed 包装浏览器无法解析,插件市场要在浏览器里验签
  *   本仓库只用它签整站产物(见 sign-site.mjs),不再用它给插件文件生成合集签名
- * - 作者签名 openssl pkeyutl -sign -rawin(Ed25519),产出裸公钥分离签名
+ * - 作者签名 openssl pkeyutl -sign -rawin(Ed25519),产出裸公钥分离签名,
+ *   只覆盖 plugin.js,文件名为 plugin.js.author.sig;多签名者依次为 plugin.js.author.sig.<序号>,
+ *   与 plugins/<作者>/author_pub.<序号>.pem 一一对应;meta.json 的作者签名已取消
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -32,10 +34,18 @@ export const EEC_KEY_FILE = 'eec_secret.pem'
 export const EEC_CSR_FILE = 'eec.csr'
 /** 作者私钥文件名 */
 export const AUTHOR_KEY_FILE = 'author_secret.pem'
-/** 作者公钥文件名,随合集分发 */
+/** 第 1 个签名者的作者公钥文件名,随合集分发;其余签名者为 author_pub.<序号>.pem */
 export const AUTHOR_PUB_FILE = 'author_pub.pem'
-/** 版本目录内可带作者签名的文件 */
-export const VERSION_SIGNED_FILES = ['meta.json', 'plugin.js']
+/** 作者分离签名后缀;第 1 个签名者为 <文件>.author.sig,其余为 <文件>.author.sig.<序号> */
+export const AUTHOR_SIG_SUFFIX = '.author.sig'
+/** 作者签名支持的签名者序号上限,超出上限的文件名视为不合约定 */
+export const MAX_AUTHOR_SIGNERS = 16
+/**
+ * 版本目录内允许携带作者分离签名的文件。
+ * 只认 plugin.js:meta.json 已由整站签名与索引数据覆盖,作者对它的签名已取消,
+ * 旧产物里遗留的 meta.json.author.sig 一律忽略,不视为错误。
+ */
+export const VERSION_AUTHOR_SIGNED_FILES = ['plugin.js']
 /** 整站签名覆盖的扩展名: 代码与索引数据全部纳入 */
 export const SITE_SIGNED_EXTENSIONS = ['.html', '.js', '.css', '.json']
 /** 整站签名清单文件名,记录本次签名的全部文件 */
@@ -63,9 +73,70 @@ export function cmsSignaturePath(filePath) {
   return filePath + '.sig'
 }
 
-/** 文件的作者分离签名路径,即 <文件>.author.sig */
-export function authorSignaturePath(filePath) {
-  return filePath + '.author.sig'
+/**
+ * 第 index 个签名者的作者分离签名路径。
+ * 序号 1 沿用 <文件>.author.sig,序号 2 起为 <文件>.author.sig.<序号>,
+ * 这样单个签名者的产物与历史目录结构逐字节兼容,多签只做向后追加。
+ * @param {string} filePath 被签名文件
+ * @param {number} [index] 签名者序号,从 1 起
+ * @returns {string}
+ */
+export function authorSignaturePath(filePath, index = 1) {
+  return index <= 1 ? filePath + AUTHOR_SIG_SUFFIX : filePath + AUTHOR_SIG_SUFFIX + '.' + index
+}
+
+/**
+ * 第 index 个签名者的作者公钥文件名,与签名文件的序号一一对应。
+ * @param {number} [index] 签名者序号,从 1 起
+ * @returns {string}
+ */
+export function authorPublicKeyFileName(index = 1) {
+  return index <= 1 ? AUTHOR_PUB_FILE : 'author_pub.' + index + '.pem'
+}
+
+/**
+ * 解析作者公钥文件名对应的签名者序号。不是约定内的作者公钥文件名时返回 null。
+ * @param {string} fileName 文件名
+ * @returns {number|null}
+ */
+export function authorSignerIndexFromKeyName(fileName) {
+  if (fileName === AUTHOR_PUB_FILE) return 1
+  const matched = /^author_pub\.(\d+)\.pem$/.exec(fileName)
+  if (!matched) return null
+  return normalizeSignerIndex(matched[1])
+}
+
+/**
+ * 从 <文件>.author.sig[.<序号>] 解析签名者序号。
+ * 序号 1 不带后缀;序号从 2 起必须是十进制、不带前导零、且不超过 MAX_AUTHOR_SIGNERS。
+ * 名字不合约定时返回 null,由调用方决定警告还是忽略。
+ * @param {string} fileName 文件名
+ * @param {string} file 被签名文件名,例如 plugin.js
+ * @returns {number|null}
+ */
+export function authorSignerIndexFromSignatureName(fileName, file) {
+  const prefix = file + AUTHOR_SIG_SUFFIX
+  if (fileName === prefix) return 1
+  if (!fileName.startsWith(prefix + '.')) return null
+  return normalizeSignerIndex(fileName.slice(prefix.length + 1))
+}
+
+/**
+ * 是否为作者签名文件名(含多签序号)。
+ * 整站签名的孤儿签名清理与校验据此跳过这些文件,不得把它们当成 <文件>.sig。
+ * @param {string} path 文件名或相对路径
+ * @returns {boolean}
+ */
+export function isAuthorSignatureFileName(path) {
+  return /\.author\.sig(?:\.\d+)?$/.test(path)
+}
+
+function normalizeSignerIndex(digits) {
+  if (!/^\d+$/.test(digits)) return null
+  if (digits.length > 1 && digits.startsWith('0')) return null
+  const index = Number(digits)
+  if (index < 2 || index > MAX_AUTHOR_SIGNERS) return null
+  return index
 }
 
 function head(text, lines = 3) {
@@ -359,14 +430,14 @@ export function genAuthorKey(dir, options = {}) {
  * 作者裸公钥分离签名,输出到 <文件>.author.sig。
  * @param {string} filePath 待签名文件
  * @param {string} authorKeyPath 作者私钥
- * @param {object} [options] out 自定义签名路径
+ * @param {object} [options] out 自定义签名路径、index 签名者序号(默认 1)
  * @returns {string} 签名文件路径
  */
 export function signFileAuthor(filePath, authorKeyPath, options = {}) {
   requireOpenssl()
   requireFile(filePath, '待签名文件')
   requireFile(authorKeyPath, '作者私钥')
-  const sigPath = options.out || authorSignaturePath(filePath)
+  const sigPath = options.out || authorSignaturePath(filePath, options.index || 1)
   ensureDirFor(sigPath)
   run(['pkeyutl', '-sign', '-rawin', '-inkey', authorKeyPath, '-in', filePath, '-out', sigPath])
   return requireOutput(sigPath, '作者签名')

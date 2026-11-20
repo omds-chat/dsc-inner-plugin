@@ -44,11 +44,11 @@
 1. 把 `repo` 克隆或复制到 `temp/import/`。
 2. 在该目录执行 `pnpm install --frozen-lockfile` 与 `pnpm build`。
 3. 读取 `dist/meta.json` 取得版本号,把 `dist/meta.json`、`dist/plugin.js` 复制到 `plugins/<author>/<plugin>/<version>/`。
-4. 若 `dist/` 内存在作者侧分离签名,按下面的对应关系一并复制,保留作者签名:
-   `dist/plugin.js.sig` 落为 `plugin.js.author.sig`,`dist/meta.json.sig` 落为 `meta.json.author.sig`。
-5. 若 `dist/` 内存在 `author_pub.pem`,复制为 `plugins/<author>/author_pub.pem`。
-6. 更新该插件的 `versions.json`、该作者的 `plugin_manifest.json`、根目录 `plugins.json`。
-7. 删除 `temp/import/` 内的临时目录。
+4. 若 `dist/` 内存在作者签名 `plugin.js.author.sig`,原样复制到版本目录同名文件;多位签名者依次为 `plugin.js.author.sig.<序号>`(序号从 2 起),同样原样复制。
+5. 若 `dist/` 内存在 `author_pub.pem` 或 `author_pub.<序号>.pem`,复制为 `plugins/<author>` 下的同名文件;序号与签名文件配对。
+6. 旧产物里遗留的 `dist/meta.json.author.sig` 只提示、不复制:作者签名只覆盖 `plugin.js`,对 `meta.json` 的作者签名已取消。
+7. 更新该插件的 `versions.json`、该作者的 `plugin_manifest.json`、根目录 `plugins.json`。
+8. 删除 `temp/import/` 内的临时目录。
 
 收录本身不生成任何签名。插件文件的整站签名由 `scripts/sign-site.mjs` 在构建产物 `dist/` 上生成: 每个 `.html`、`.js`、`.css`、`.json` 文件写出 `<文件>.sig`,并汇总为 `web_files.json` 与其签名。
 

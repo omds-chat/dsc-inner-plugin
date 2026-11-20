@@ -23,6 +23,7 @@ import {
   SITE_SIGNED_EXTENSIONS,
   WEB_MANIFEST_FILE,
   cmsSignaturePath,
+  isAuthorSignatureFileName,
   verifyChain,
   verifyFileCms,
   verifyFileCmsNoChain,
@@ -165,8 +166,9 @@ function main() {
     }
   }
 
+  // 作者签名(含 .author.sig.<序号> 多签)不属于整站签名,不参与孤儿签名检查
   for (const rel of all) {
-    if (!rel.endsWith('.sig') || rel.endsWith('.author.sig')) continue
+    if (!rel.endsWith('.sig') || isAuthorSignatureFileName(rel)) continue
     const target = rel.slice(0, -'.sig'.length)
     if (!existsSync(toAbsolute(dir, target))) failures.push({ file: rel, reason: '签名对应的文件不存在' })
   }

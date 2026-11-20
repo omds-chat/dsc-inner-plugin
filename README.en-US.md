@@ -21,8 +21,8 @@ This repository is an internal plugin index, not a community collection and not 
 | Role | internal plugin index endorsed by dsc | community plugin collection |
 | What it lists | optional in-house plugins decoupled from DeepSeek-Chat-Enhanced, built by dsc | third-party plugins from community submissions |
 | Trust anchor | the dsc web EEC signs the whole site | a collection EEC signs plugin files |
-| Plugin file signatures | dsc signs `*.author.sig` as the author | authors sign `*.author.sig`, the collection adds CMS signatures |
-| Version directory | `meta.json`, `plugin.js`, author signatures | `meta.json`, `plugin.js`, two CMS signatures, author signatures |
+| Plugin file signatures | dsc signs `plugin.js.author.sig` as the author | authors sign `*.author.sig`, the collection adds CMS signatures |
+| Version directory | `meta.json`, `plugin.js`, `plugin.js.author.sig` | `meta.json`, `plugin.js`, two CMS signatures, author signatures |
 | Certificate in the repository root | none, certificates appear only in `dist/` | `eec.pem` |
 | Market verification order | verify the Pages site signatures first, then author signatures | verify the collection EEC chain first, then plugin signatures |
 | Install channel | ordinary dsc-market channel with a soft security gate | the same |
@@ -63,7 +63,7 @@ Trust here is built from two layers. Both are signed by dsc, but they cover diff
 | Layer | Signer | Key | Covers | Artifacts |
 |:---:|:---:|:---:|:---:|:---:|
 | Site-wide signature | the dsc web signer (EEC) | ECDSA P-256 | every `.html`, `.js`, `.css` and `.json` file in `dist/` | `<file>.sig`, `web_files.json`, `web_files.json.sig`, `eec.pem` |
-| Author signature | dsc, as the plugin author | Ed25519 | `meta.json` and `plugin.js` of every version | `meta.json.author.sig`, `plugin.js.author.sig` |
+| Author signature | dsc, as the plugin author | Ed25519 | `plugin.js` of every version | `plugin.js.author.sig`, with `.2`, `.3` for co-signers |
 
 Both layers are needed because they answer two different questions:
 
@@ -97,15 +97,32 @@ dist/web_files.json.sig
 
 The web EEC must be ECDSA P-256, not Ed25519: OpenSSL's CMS implementation reports `provider signature failure` when signing with an Ed25519 key, so it is unusable in practice.
 
-The site-wide signature covers only `.html`, `.js`, `.css` and `.json`. `eec.pem` is the certificate itself and is read directly by the market; author signatures `*.author.sig` are not covered by the site-wide signature, because they have their own verification path.
+The site-wide signature covers only `.html`, `.js`, `.css` and `.json`. `eec.pem` is the certificate itself and is read directly by the market; author signatures `plugin.js.author.sig` (and `.author.sig.<n>` for co-signers) are not covered by the site-wide signature, because they have their own verification path.
 
 ### Author signatures
 
-dsc is also the plugin author, and signs `meta.json` and `plugin.js` of every version with an Ed25519 bare public key:
+dsc is also the plugin author, and signs `plugin.js` of every version with an Ed25519 bare public key. Under the organisation convention the author signature covers `plugin.js` only: author signatures over `meta.json` are retired, because the site-wide signature and the index data already cover `meta.json`. A leftover `meta.json.author.sig` in an old artifact is ignored and is not an error.
 
 - The author public key ships with the artifact and is stored as `plugins/<author>/author_pub.pem` (Ed25519, OpenSSL PEM).
-- The author's `plugin.js.sig` and `meta.json.sig` are stored as `plugin.js.author.sig` and `meta.json.author.sig`, so the `author` suffix tells them apart from the site-wide signatures.
-- Author signatures are optional, but they are the default for dsc-built plugins. A missing author signature only produces a warning, and that version is still covered by the site-wide signature.
+- The author signature has the same file name in the artifact and in the collection, `plugin.js.author.sig`; import only copies it and never renames it.
+- One author can have several signers, paired by index as described in "Multi-signature naming" below.
+- Author signatures are optional, but they are the default for in-house plugins. The plugin repository's build produces one only when `AUTHOR_SIGN_ENABLE=true` and `AUTHOR_SIGN_PRIVATE_KEY` are set; a missing author signature during import only produces a warning, and that version is still covered by the site-wide signature.
+- Each signer is verified in turn, and any failure is reported as a warning only, never blocking a release (the organisation-wide rule: signature failures only warn). The verification result keeps the full signer list so the market can display multiple signers.
+
+### Multi-signature naming
+
+One author may have several signers, for example the author and a co-maintainer holding separate Ed25519 keys. File names pair by index, and index 1 keeps the historical name, so already published single-signer artifacts need no change:
+
+| Signer index | Signature in the version directory | Public key in the author directory |
+|:---:|:---:|:---:|
+| 1 | `plugin.js.author.sig` | `author_pub.pem` |
+| 2 | `plugin.js.author.sig.2` | `author_pub.2.pem` |
+| n | `plugin.js.author.sig.<n>` | `author_pub.<n>.pem` |
+
+- From index 2 on the suffix must be decimal without leading zeros, up to 16. Names such as `plugin.js.author.sig.1` or `plugin.js.author.sig.02` break the convention: verification only warns and ignores them.
+- Indices do not have to be contiguous: a signer withdrawing deletes its own signature and public key, the other indices stay unchanged, and already published signature files are untouched.
+- The index is used instead of a signer name in the file name because signer names have no organisation-wide registry: putting them into file names needs an extra mapping table and drags in case and escaping conflicts with author directory names and plugin names. An index depends only on two adjacent files in the same directory, so verifiers need no registry and adding a signer appends exactly one pair of files.
+- Compatibility: single-signer artifacts, `author_pub.pem`, the historical directory layout and the documented paths stay byte-for-byte unchanged. The `.author.sig` prefix is kept, so every tool that recognises author signatures by that suffix, such as the orphan-signature sweep in `sign-site.mjs`, keeps working, and the new `.author.sig.<index>` files are recognised by the same rule.
 
 ### How the market verifies this source
 
@@ -117,7 +134,7 @@ The market reads the index, fetches files and verifies signatures in this order.
 | 2 | `<base_url>/web_files.json` and `web_files.json.sig` | read the signed manifest and verify the manifest signature first |
 | 3 | `<base_url>/<file>.sig` | verify the CMS signature of every file listed in the manifest |
 | 4 | `<base_url>/plugins.json`, `plugins/<author>/<plugin>/versions.json`, every `meta.json` | index data, already verified in the previous step, drives what the market displays |
-| 5 | `<base_url>/plugins/<author>/author_pub.pem` and `*.author.sig` | verify the plugin author signature |
+| 5 | `<base_url>/plugins/<author>/author_pub.pem`, `author_pub.<n>.pem`, `plugin.js.author.sig` and `.author.sig.<n>` | verify every author signer; failures only warn |
 | 6 | `<base_url>/plugins/<author>/<plugin>/<x.y.z>/plugin.js` | read the runtime script, verified in the previous step |
 
 The trust anchor for the chain is not in this repository but on the `online-data` branch: the market reads `rootCa` from `index.json`, fetches `root_ca.crt`, and uses it to verify `dist/eec.pem`. This repository only publishes the signed data to Pages.
@@ -158,15 +175,15 @@ dsc-inner-plugin/
 ├── plugins/
 │   ├── author_manifest.json            registered authors
 │   └── <author>/
-│       ├── author_pub.pem              that author's Ed25519 public key
+│       ├── author_pub.pem              signer 1's Ed25519 public key
+│       ├── author_pub.<n>.pem          signer n's public key (optional)
 │       ├── plugin_manifest.json        that author's plugin list
 │       └── <plugin>/
 │           ├── versions.json           version list
 │           └── <x.y.z>/
 │               ├── meta.json           plugin runtime metadata
-│               ├── meta.json.author.sig  author bare-key signature (optional)
 │               ├── plugin.js           plugin runtime script
-│               └── plugin.js.author.sig  author bare-key signature (optional)
+│               └── plugin.js.author.sig  author bare-key signature (optional, .2/.3 for co-signers)
 └── scripts/
     ├── pki.mjs                         OpenSSL PKI wrapper, shell calls only, no cryptography
     ├── lib/collection-verify.mjs       shared verification logic
@@ -196,7 +213,7 @@ Counting is off for this index.
 ## How to get a plugin listed
 
 1. An organisation maintainer opens a pull request against `.github/plugins-sources.json`, one entry per plugin, with `repo`, an optional `ref`, `author` and `plugin`. Field and import rules are in [.github/plugins-sources.README.md](.github/plugins-sources.README.md).
-2. After merge, CI clones or copies the source into `temp/import/`, runs `pnpm install --frozen-lockfile` and `pnpm build`, writes `dist/meta.json` and `dist/plugin.js` into `plugins/<author>/<plugin>/<version>/`, stores author-side detached signatures as `*.author.sig`, stores `dist/author_pub.pem` as `plugins/<author>/author_pub.pem`, then updates that plugin's `versions.json`, that author's `plugin_manifest.json` and the root `plugins.json`.
+2. After merge, CI clones or copies the source into `temp/import/`, runs `pnpm install --frozen-lockfile` and `pnpm build`, writes `dist/meta.json` and `dist/plugin.js` into `plugins/<author>/<plugin>/<version>/`, copies `dist/plugin.js.author.sig` (and `.author.sig.<index>` for co-signers) into the version directory unchanged, copies `dist/author_pub.pem` and `author_pub.<index>.pem` into `plugins/<author>/` under the same names, then updates that plugin's `versions.json`, that author's `plugin_manifest.json` and the root `plugins.json`.
 3. Add tags by hand. New index entries start with an empty `tag` array and need tags picked from `tags.json`. Undeclared tags are rejected by verification.
 4. Build and publish. CI runs `pnpm verify` (consistency check, no certificate chain involved), `pnpm build` (produce `dist/`), `scripts/sign-site.mjs` (site-wide signing with `secrets.WEB_EEC_KEY`) and `scripts/verify-site.mjs` (signature self-check), then publishes `dist/` to Pages.
 
@@ -210,13 +227,13 @@ Listing a plugin runs through four stages - directory, manifests, signing and ve
 |:---:|:---:|:---:|:---:|
 | Directory | CI import script | `plugins/<author>/<plugin>/<x.y.z>/` and `versions.json` | `node scripts/import-plugins.mjs --manifest .github/plugins-sources.json` |
 | Manifests | an organisation maintainer declares the source, CI writes the manifests | `.github/plugins-sources.json`, `plugins/author_manifest.json`, `plugins/<author>/plugin_manifest.json`, `plugins.json` | a maintainer pull request, then the same import run; tags are added by hand |
-| Signing | the author signature comes from the plugin repository's build, the site-wide signature from CI | `*.author.sig` in the version directory and `plugins/<author>/author_pub.pem`; `dist/<file>.sig`, `web_files.json`, `eec.pem` | artifact signatures are copied during import; the signing step runs `scripts/sign-site.mjs` with `secrets.WEB_EEC_KEY` and `secrets.WEB_EEC_CERT` |
+| Signing | the author signature comes from the plugin repository's build, the site-wide signature from CI | `plugin.js.author.sig` (and `.author.sig.<index>`) plus `plugins/<author>/author_pub.pem` and `author_pub.<index>.pem`; `dist/<file>.sig`, `web_files.json`, `eec.pem` | artifact signatures are copied during import; the signing step runs `scripts/sign-site.mjs` with `secrets.WEB_EEC_KEY` and `secrets.WEB_EEC_CERT` |
 | Verification | CI and the plugin market | read-only | CI runs `pnpm verify`, `pnpm build` and `pnpm verify:site` in order; the market replays "How the market verifies this source" |
 
 Step by step, for one pull request:
 
 1. An organisation maintainer adds one entry to `.github/plugins-sources.json` with `repo`, an optional `ref`, `author` and `plugin`, plus an optional `profile` to register the author page. Field rules are in [.github/plugins-sources.README.md](.github/plugins-sources.README.md).
-2. After merge, CI imports: it creates the version directory, copies `dist/meta.json` and `dist/plugin.js`, stores `dist/plugin.js.sig` and `dist/meta.json.sig` as `*.author.sig`, stores `dist/author_pub.pem` as `plugins/<author>/author_pub.pem`, and updates `versions.json`, `plugin_manifest.json`, `author_manifest.json` and `plugins.json`.
+2. After merge, CI imports: it creates the version directory, copies `dist/meta.json` and `dist/plugin.js`, copies `dist/plugin.js.author.sig` (and `.author.sig.<index>` for co-signers) into it unchanged, copies `dist/author_pub.pem` and `author_pub.<index>.pem` into `plugins/<author>/` under the same names, and updates `versions.json`, `plugin_manifest.json`, `author_manifest.json` and `plugins.json`.
 3. The maintainer adds tags picked from `tags.json` to `plugins.json`; tags not declared there are rejected by verification.
 4. CI verifies and signs: `pnpm verify` must pass, `pnpm build` produces `dist/`, `scripts/sign-site.mjs` signs the whole site, and `scripts/verify-site.mjs` checks the result before Pages is published.
 
@@ -257,13 +274,15 @@ pnpm run import              # import plugins from the source manifest
 - When the key or the certificate is missing, `sign-site.mjs` only warns and keeps an unsigned `dist/`, which suits local debugging. CI passes `--require-key` and treats the same condition as an error.
 - `verify-site.mjs` verifies the full certificate chain when `--root-ca` is given, and only checks signature integrity otherwise.
 - Use `pnpm run import`. `pnpm import` is a built-in pnpm command, not this repository's import script.
+- To produce author signatures, the import environment needs `AUTHOR_SIGN_ENABLE=true` and `AUTHOR_SIGN_PRIVATE_KEY`. The import script only forwards both to the plugin build and never reads the key content; when signing is enabled without a key it degrades to unsigned with a warning and import continues.
+- An author signature failure only produces a warning and never fails `pnpm verify` or `pnpm build`; only index structure and public key material errors block.
 - OpenSSL 3.0 or newer is required locally. The scripts only call the `openssl` command line and implement no cryptography themselves.
 
 ## Security notes
 
 - When a signature fails, the market warns the user and suggests downloading again. It does not run the plugin silently.
 - Being listed is not a certification. A signature proves the content matches its signer, not that the plugin behaviour was audited.
-- Keep private keys in CI secrets and local environment variables, never in the repository. The web EEC key lives in `WEB_EEC_KEY`; the root private key never enters this repository and never enters CI. `.gitignore` already excludes `.env`.
+- Keep private keys in CI secrets and local environment variables, never in the repository. The web EEC key lives in `WEB_EEC_KEY`; the author key lives in `AUTHOR_SIGN_PRIVATE_KEY` on the plugin repository side and this repository only forwards it to the plugin build, never using it for import, verification or site-wide signing; the root private key never enters this repository and never enters CI. `.gitignore` already excludes `.env`.
 - Rotating the web EEC key pair means updating both `WEB_EEC_KEY` and `WEB_EEC_CERT` and syncing `eec.pem` on the `online-data` branch; CMS signatures made with the old certificate can no longer be verified.
 - Signatures cover file bytes. Any change to line endings, indentation or whitespace breaks verification, and the repository uses LF everywhere. Author artifacts must be LF too.
 - Minify plugin artifacts. It reduces size and removes meaningless whitespace differences.

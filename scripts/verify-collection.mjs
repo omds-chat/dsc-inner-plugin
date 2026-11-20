@@ -82,6 +82,16 @@ function main() {
     process.stdout.write(JSON.stringify(result, null, 2) + '\n')
   } else {
     if (result.problems.length > 0) process.stdout.write(formatProblems(result.problems) + '\n')
+    if (result.signatures.length > 0) {
+      const signerTotal = result.signatures.reduce((sum, item) => sum + item.signers.length, 0)
+      const signerFailed = result.signatures.reduce(
+        (sum, item) => sum + item.signers.filter((signer) => !signer.ok).length,
+        0,
+      )
+      process.stdout.write(
+        '作者签名: ' + result.signatures.length + ' 个文件,' + signerTotal + ' 个签名者,未通过 ' + signerFailed + ' 个\n',
+      )
+    }
     const summary =
       '合集 ' + result.collectionName + ':' +
       result.stats.authors + ' 个作者,' +

@@ -5,10 +5,11 @@
  * 本仓库的信任模型分两层:
  * - 整站签名: 用 dsc 的网页终端签名证书(EEC)给 dist/ 内每个 .html/.js/.css/.json 文件签名,
  *   产出 <文件>.sig、web_files.json 与 web_files.json.sig,并把证书复制为 dist/eec.pem;
- * - 作者签名: dsc 作为插件作者,用 Ed25519 裸公钥分离签名给 plugin.js 与 meta.json 签名,
- *   随插件产物收录为 *.author.sig,由 verify-collection.mjs 校验。
+ * - 作者签名: dsc 作为插件作者,用 Ed25519 裸公钥分离签名只给 plugin.js 签名,
+ *   随插件产物收录为 plugin.js.author.sig(多签为 plugin.js.author.sig.<序号>),
+ *   由 verify-collection.mjs 校验。
  *
- * 索引数据(datalog.json、versions.json、各 meta.json)决定市场显示什么,因此一并签名。
+ * 索引数据(plugins.json、versions.json、各 meta.json)决定市场显示什么,因此一并签名。
  * 签名是对文件原始字节的 CMS 分离签名,固定 -binary -outform DER,与 dsce 的 sign-web 同一套机制。
  *
  * 私钥只从环境变量 WEB_EEC_KEY 或 --key 读取,证书从 --eec 或环境变量 WEB_EEC_CERT 读取,
@@ -31,6 +32,7 @@ import {
   cmsSignaturePath,
   describeCertificate,
   hasDigitalSignature,
+  isAuthorSignatureFileName,
   requireOpenssl,
   resolveKeyFile,
   signFileCms,
@@ -38,8 +40,6 @@ import {
 
 /** 站点签名的后缀,用于识别孤儿签名 */
 const SITE_SIGNATURE_SUFFIX = '.sig'
-/** 作者签名的后缀,站点签名不得覆盖或清理这类文件 */
-const AUTHOR_SIGNATURE_SUFFIX = '.author.sig'
 
 function usage() {
   process.stdout.write([
@@ -185,10 +185,11 @@ function main() {
 
     const all = listFiles(dir).sort()
 
-    // 孤儿签名: 源文件已不在的站点签名直接清掉,避免上一轮产物残留
+    // 孤儿签名: 源文件已不在的站点签名直接清掉,避免上一轮产物残留。
+    // 作者签名(含 .author.sig.<序号> 多签)不是站点签名,不清、不覆盖。
     let removed = 0
     for (const rel of all) {
-      if (!rel.endsWith(SITE_SIGNATURE_SUFFIX) || rel.endsWith(AUTHOR_SIGNATURE_SUFFIX)) continue
+      if (!rel.endsWith(SITE_SIGNATURE_SUFFIX) || isAuthorSignatureFileName(rel)) continue
       const target = rel.slice(0, -SITE_SIGNATURE_SUFFIX.length)
       if (rel === WEB_MANIFEST_FILE + SITE_SIGNATURE_SUFFIX) continue
       if (existsSync(toAbsolute(dir, target))) continue

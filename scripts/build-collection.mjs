@@ -174,11 +174,12 @@ function main() {
   }
 
   const dist = writeDist(root, outDir, result.collectionName)
+  const signerNote = result.stats.authorSignatures > 0 ? ',作者签名 ' + result.stats.authorSignatures + ' 个签名者' : ''
   process.stdout.write(
     '合集 ' + result.collectionName + ' 校验通过:' +
     result.stats.authors + ' 个作者,' +
     result.stats.plugins + ' 个插件,' +
-    result.stats.versions + ' 个版本' + '\n',
+    result.stats.versions + ' 个版本' + signerNote + '\n',
   )
   if (warnings.length > 0) {
     process.stdout.write('警告 ' + warnings.length + ' 条:' + '\n')

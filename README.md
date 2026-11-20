@@ -21,8 +21,8 @@ dsc 背书的内部插件索引: 收录从 DeepSeek-Chat-Enhanced 本体解耦�
 | 定位 | dsc 背书的内部插件索引 | 社区插件合集 |
 | 收录范围 | 从 DeepSeek-Chat-Enhanced 解耦的可选内部插件,dsc 自研 | 社区投稿的第三方插件 |
 | 信任来源 | dsc 网页 EEC 签整站 | 合集 EEC 签插件文件 |
-| 插件文件签名 | dsc 作为作者签 `*.author.sig` | 作者自签 `*.author.sig`,合集再签 CMS |
-| 版本目录文件 | `meta.json`、`plugin.js`、作者签名 | `meta.json`、`plugin.js`、两份 CMS 签名、作者签名 |
+| 插件文件签名 | dsc 作为作者签 `plugin.js.author.sig` | 作者自签 `*.author.sig`,合集再签 CMS |
+| 版本目录文件 | `meta.json`、`plugin.js`、`plugin.js.author.sig` | `meta.json`、`plugin.js`、两份 CMS 签名、作者签名 |
 | 根目录证书 | 无,证书只出现在 `dist/` | `eec.pem` |
 | 市场校验顺序 | 先验 Pages 整站签名,再验作者签名 | 先验合集 EEC 链,再验插件签名 |
 | 安装通道 | dsc-market 普通通道,软安全门禁 | 同左 |
@@ -63,7 +63,7 @@ dsc 背书的内部插件索引: 收录从 DeepSeek-Chat-Enhanced 本体解耦�
 | 层 | 签名者 | 密钥 | 覆盖对象 | 产物 |
 |:---:|:---:|:---:|:---:|:---:|
 | 整站签名 | dsc 网页签名方(EEC) | ECDSA P-256 | `dist/` 内全部 `.html`、`.js`、`.css`、`.json` 文件 | `<文件>.sig`、`web_files.json`、`web_files.json.sig`、`eec.pem` |
-| 作者签名 | dsc(作为插件作者) | Ed25519 | 每个版本的 `meta.json` 与 `plugin.js` | `meta.json.author.sig`、`plugin.js.author.sig` |
+| 作者签名 | dsc(作为插件作者) | Ed25519 | 每个版本的 `plugin.js` | `plugin.js.author.sig`,多签追加 `.2`、`.3` |
 
 两层都要,是因为它们回答两个不同的问题:
 
@@ -97,15 +97,32 @@ dist/web_files.json.sig
 
 网页 EEC 必须用 ECDSA P-256,不能用 Ed25519: OpenSSL 的 CMS 实现对 Ed25519 私钥签名报 `provider signature failure`,实测不可用。
 
-整站签名只签 `.html`、`.js`、`.css`、`.json` 四类文件。`eec.pem` 是证书本身,由市场直接读取;作者签名 `*.author.sig` 不被整站签名覆盖,它有自己的验证链。
+整站签名只签 `.html`、`.js`、`.css`、`.json` 四类文件。`eec.pem` 是证书本身,由市场直接读取;作者签名 `plugin.js.author.sig`(多签为 `.author.sig.<序号>`)不被整站签名覆盖,它有自己的验证链。
 
 ### 作者签名
 
-dsc 同时是插件作者,用 Ed25519 裸公钥给每个版本的 `meta.json` 与 `plugin.js` 签名:
+dsc 同时是插件作者,用 Ed25519 裸公钥给每个版本的 `plugin.js` 签名。按组织约定,作者签名只覆盖 `plugin.js`:对 `meta.json` 的作者签名已取消,`meta.json` 的完整性由整站签名与索引数据共同覆盖,旧产物里遗留的 `meta.json.author.sig` 一律忽略,不算错误。
 
 - 作者公钥随产物提供,收录为 `plugins/<author>/author_pub.pem`(Ed25519,OpenSSL PEM)。
-- 作者的 `plugin.js.sig` 与 `meta.json.sig` 收录为 `plugin.js.author.sig` 与 `meta.json.author.sig`,文件名带 `author` 后缀,与整站签名区分。
-- 作者签名是可选项,但对 dsc 自研插件是默认项。缺少作者签名时校验只警告,该版本仍受整站签名覆盖。
+- 作者签名在产物与合集内同名,都是 `plugin.js.author.sig`,收录只做复制,不改名。
+- 同一作者可以有多个签名者,按序号配对,见下节「多签命名」。
+- 作者签名是可选项,但对本组织自研插件是默认项。插件仓库的构建要设置 `AUTHOR_SIGN_ENABLE=true` 并提供 `AUTHOR_SIGN_PRIVATE_KEY` 才会产出;收录时缺少作者签名只警告,该版本仍受整站签名覆盖。
+- 校验按签名者逐位进行,任一失败只记警告、不阻断发布(全组织口径:签名失败只警告)。校验结果保留完整的签名者列表,市场可据此展示多个签名者。
+
+### 多签命名
+
+同一位作者下可以有多个签名者,例如作者本人与共同维护者各持一把 Ed25519 密钥。文件名用序号配对,序号 1 沿用既有文件名,已发布的单签产物无需改动:
+
+| 签名者序号 | 版本目录内的签名 | 作者目录内的公钥 |
+|:---:|:---:|:---:|
+| 1 | `plugin.js.author.sig` | `author_pub.pem` |
+| 2 | `plugin.js.author.sig.2` | `author_pub.2.pem` |
+| n | `plugin.js.author.sig.<n>` | `author_pub.<n>.pem` |
+
+- 序号从 2 起必须是十进制、不带前导零,上限 16。`plugin.js.author.sig.1`、`plugin.js.author.sig.02` 这类写法不合约定,校验只提示并忽略,不参与校验。
+- 序号不必连续:某位签名者撤签时删掉自己的签名与公钥即可,其余签名者的序号不变,已发布的签名文件也不受影响。
+- 用序号而不在文件名里写签名者姓名,是因为签名者姓名没有组织级注册表:写进文件名要额外维护一张映射表,还会与作者目录名、插件名在大小写与转义上纠缠;序号只依赖目录内相邻的两个文件,校验方不需要注册表,扩容时只追加一对文件。
+- 兼容性:单签产物、`author_pub.pem`、历史目录结构与本文档的既有路径逐字节不变;`.author.sig` 前缀保留,按该后缀识别作者签名的工具(例如 `sign-site.mjs` 的孤儿签名清理)继续有效,新增的 `.author.sig.<序号>` 也按同一规则识别。
 
 ### 市场如何校验本来源
 
@@ -117,7 +134,7 @@ dsc 同时是插件作者,用 Ed25519 裸公钥给每个版本的 `meta.json` �
 | 2 | `<base_url>/web_files.json` 与 `web_files.json.sig` | 取签名清单,先校验清单签名 |
 | 3 | `<base_url>/<文件>.sig` | 用清单列出的文件逐个校验 CMS 签名 |
 | 4 | `<base_url>/plugins.json`、`plugins/<author>/<plugin>/versions.json`、各 `meta.json` | 索引数据,已在上一步验签,据此显示插件与版本 |
-| 5 | `<base_url>/plugins/<author>/author_pub.pem` 与 `*.author.sig` | 校验插件作者签名 |
+| 5 | `<base_url>/plugins/<author>/author_pub.pem`、`author_pub.<n>.pem` 与 `plugin.js.author.sig`、`.author.sig.<n>` | 逐位签名者校验插件作者签名,失败只警告 |
 | 6 | `<base_url>/plugins/<author>/<plugin>/<x.y.z>/plugin.js` | 取运行时脚本,已在上一步验签 |
 
 证书链的信任锚不在本仓库,而在 `online-data` 分支: 市场从 `index.json` 读取 `rootCa` 指向的 `root_ca.crt` 作为锚点,再用它校验 `dist/eec.pem`。本仓库只负责把签名数据发布到 Pages。
@@ -158,15 +175,15 @@ dsc-inner-plugin/
 ├── plugins/
 │   ├── author_manifest.json            登记的作者清单
 │   └── <author>/
-│       ├── author_pub.pem              该作者的 Ed25519 公钥
+│       ├── author_pub.pem              第 1 位签名者的 Ed25519 公钥
+│       ├── author_pub.<n>.pem          第 n 位签名者的公钥(可选)
 │       ├── plugin_manifest.json        该作者的插件清单
 │       └── <plugin>/
 │           ├── versions.json           版本列表
 │           └── <x.y.z>/
 │               ├── meta.json           插件运行时元数据
-│               ├── meta.json.author.sig  作者裸公钥签名(可选)
 │               ├── plugin.js           插件运行时脚本
-│               └── plugin.js.author.sig  作者裸公钥签名(可选)
+│               └── plugin.js.author.sig  作者裸公钥签名(可选,多签追加 .2、.3)
 └── scripts/
     ├── pki.mjs                         OpenSSL PKI 封装,只调用命令行不做密码学
     ├── lib/collection-verify.mjs       两个脚本共用的校验逻辑
@@ -196,7 +213,7 @@ dsc-inner-plugin/
 ## 收录流程
 
 1. 由组织维护者提交 PR 修改 `.github/plugins-sources.json`,每个插件一项,写明 `repo`、可选的 `ref`、`author` 与 `plugin`。字段与收录规则见 [.github/plugins-sources.README.md](.github/plugins-sources.README.md)。
-2. 合并后 CI 依次执行: 克隆或复制源码到 `temp/import/`、`pnpm install --frozen-lockfile`、`pnpm build`、把 `dist/meta.json` 与 `dist/plugin.js` 写入 `plugins/<author>/<plugin>/<version>/`、把作者侧分离签名落为 `*.author.sig`、把 `dist/author_pub.pem` 落为 `plugins/<author>/author_pub.pem`,再更新该插件的 `versions.json`、该作者的 `plugin_manifest.json` 与根目录 `plugins.json`。
+2. 合并后 CI 依次执行: 克隆或复制源码到 `temp/import/`、`pnpm install --frozen-lockfile`、`pnpm build`、把 `dist/meta.json` 与 `dist/plugin.js` 写入 `plugins/<author>/<plugin>/<version>/`、把 `dist/plugin.js.author.sig`(多签 `.author.sig.<序号>`)原样复制到版本目录、把 `dist/author_pub.pem` 与 `author_pub.<序号>.pem` 复制为 `plugins/<author>/` 下的同名文件,再更新该插件的 `versions.json`、该作者的 `plugin_manifest.json` 与根目录 `plugins.json`。
 3. 人工补充标签。新条目在 `plugins.json` 里的 `tag` 初始为空数组,需要从 `tags.json` 的预设标签中挑选后提交。未在 `tags.json` 中声明的标签会被校验拒绝。
 4. 构建与发布。CI 依次执行 `pnpm verify`(自洽性校验,不涉及证书链)、`pnpm build`(生成 `dist/`)、`scripts/sign-site.mjs`(用 `secrets.WEB_EEC_KEY` 做整站签名)、`scripts/verify-site.mjs`(签名自检),最后把 `dist/` 发布到 Pages。
 
@@ -210,13 +227,13 @@ dsc-inner-plugin/
 |:---:|:---:|:---:|:---:|
 | 目录 | CI 收录脚本 | `plugins/<author>/<plugin>/<x.y.z>/` 与 `versions.json` | `node scripts/import-plugins.mjs --manifest .github/plugins-sources.json` |
 | 清单 | 组织维护者声明来源,CI 写入清单 | `.github/plugins-sources.json`、`plugins/author_manifest.json`、`plugins/<author>/plugin_manifest.json`、`plugins.json` | 维护者 PR 后由同一次收录写入;标签人工补 |
-| 签名 | 作者签名由插件仓库构建完成,整站签名由 CI 完成 | 版本目录的 `*.author.sig` 与 `plugins/<author>/author_pub.pem`;`dist/<文件>.sig`、`web_files.json`、`eec.pem` | 收录时复制产物签名;签名步骤用 `secrets.WEB_EEC_KEY` 与 `secrets.WEB_EEC_CERT` 执行 `scripts/sign-site.mjs` |
+| 签名 | 作者签名由插件仓库构建完成,整站签名由 CI 完成 | 版本目录的 `plugin.js.author.sig`(多签 `.author.sig.<序号>`)与 `plugins/<author>/author_pub.pem`、`author_pub.<序号>.pem`;`dist/<文件>.sig`、`web_files.json`、`eec.pem` | 收录时复制产物签名;签名步骤用 `secrets.WEB_EEC_KEY` 与 `secrets.WEB_EEC_CERT` 执行 `scripts/sign-site.mjs` |
 | 校验 | CI 与插件市场 | 只读 | CI 依次跑 `pnpm verify`、`pnpm build`、`pnpm verify:site`;市场按「市场如何校验本来源」复核 |
 
 具体到一次 PR:
 
 1. 组织维护者在 `.github/plugins-sources.json` 增加一项,写 `repo`、可选 `ref`、`author` 与 `plugin`,可附 `profile` 登记作者主页。字段见 [.github/plugins-sources.README.md](.github/plugins-sources.README.md)。
-2. 合并后由 CI 收录:建版本目录、复制 `dist/meta.json` 与 `dist/plugin.js`、把 `dist/plugin.js.sig` 与 `dist/meta.json.sig` 落为 `*.author.sig`、把 `dist/author_pub.pem` 落为 `plugins/<author>/author_pub.pem`,再更新 `versions.json`、`plugin_manifest.json`、`author_manifest.json` 与 `plugins.json`。
+2. 合并后由 CI 收录:建版本目录、复制 `dist/meta.json` 与 `dist/plugin.js`、把 `dist/plugin.js.author.sig`(多签 `.author.sig.<序号>`)原样复制到版本目录、把 `dist/author_pub.pem` 与 `author_pub.<序号>.pem` 复制为 `plugins/<author>/` 下的同名文件,再更新 `versions.json`、`plugin_manifest.json`、`author_manifest.json` 与 `plugins.json`。
 3. 组织维护者从 `tags.json` 挑标签补进 `plugins.json`;未在 `tags.json` 声明的标签会被校验拒绝。
 4. CI 校验并签名:`pnpm verify` 通过后 `pnpm build` 生成 `dist/`,再用 `scripts/sign-site.mjs` 做整站签名,最后由 `scripts/verify-site.mjs` 自检,全部通过才发布 Pages。
 
@@ -257,13 +274,15 @@ pnpm run import              # 按来源清单收录插件
 - 缺少私钥或证书时 `sign-site.mjs` 只警告并保留未签名 `dist/`,方便本地调试;CI 传 `--require-key`,把这种缺失当错误。
 - `verify-site.mjs` 给出 `--root-ca` 时做完整证书链校验,不给时只做签名完整性校验。
 - 收录请用 `pnpm run import`。`pnpm import` 是 pnpm 自带命令,不是本仓库的收录脚本。
+- 要产出作者签名,收录环境需设置 `AUTHOR_SIGN_ENABLE=true` 与 `AUTHOR_SIGN_PRIVATE_KEY`,收录脚本只把这两个变量透传给插件构建、不读取私钥内容;开启但没有私钥时如实降级为不签名并警告,收录照常继续。
+- 作者签名失败只记警告,不让 `pnpm verify` 或 `pnpm build` 失败;索引结构与公钥材料出错才会阻断。
 - 本机需要 OpenSSL 3.0 及以上,脚本只调用 `openssl` 命令行,不实现任何密码学运算。
 
 ## 安全提示
 
 - 签名不通过时插件市场会警告用户并建议重新下载,不会静默运行。
 - 收录不等于认证。签名只证明分发内容与签名者一致,不代表插件行为经过审查。
-- 私钥只放 CI secrets 与本地环境变量,不要提交。网页 EEC 私钥放在 `WEB_EEC_KEY`;根证书私钥永远不进本仓库,也不进 CI。`.gitignore` 已排除 `.env`。
+- 私钥只放 CI secrets 与本地环境变量,不要提交。网页 EEC 私钥放在 `WEB_EEC_KEY`;作者私钥放在插件仓库侧的 `AUTHOR_SIGN_PRIVATE_KEY`,本仓库只透传给插件构建,收录、校验与整站签名都不使用它;根证书私钥永远不进本仓库,也不进 CI。`.gitignore` 已排除 `.env`。
 - 更换网页 EEC 密钥对必须同时更新 `WEB_EEC_KEY` 与 `WEB_EEC_CERT`,并同步 `online-data` 分支的 `eec.pem`;旧证书签出的 CMS 签名将无法再验证。
 - 签名覆盖文件字节。换行、缩进或空白的任何改动都会让校验失败,仓库统一使用 LF,作者产物也必须是 LF。
 - 插件产物建议行压缩,既减小体积,也避免无意义的空白差异。

@@ -9,7 +9,7 @@ on:
       - 'scripts/**'
       - '.github/**'
       - 'meta.json'
-      - 'datalog.json'
+      - 'plugins.json'
       - 'tags.json'
   release:
     types:
@@ -29,12 +29,14 @@ concurrency:
 # 本仓库由 dsc 直接签名发布,信任分两层:
 #   1. 整站签名: 用网页 EEC 给 dist/ 内每个 .html/.js/.css/.json 文件签 CMS 分离签名,
 #      市场校验的是本仓库 Pages 页面的签名数据,而不是「合集 EEC 签发插件」那套;
-#   2. 作者签名: dsc 作为插件作者用 Ed25519 给每个版本的 meta.json 与 plugin.js 签 *.author.sig。
+#   2. 作者签名: dsc 作为插件作者用 Ed25519 只给每个版本的 plugin.js 签 plugin.js.author.sig;
+#      多位签名者依次为 plugin.js.author.sig.<序号>,配 plugins/<作者>/author_pub.<序号>.pem。
 #
 # 私钥只来自 secrets:
-#   secrets.WEB_EEC_KEY   网页 EEC 私钥(ECDSA P-256),只在本流程内存中出现;
-#   secrets.WEB_EEC_CERT  网页 EEC 证书 PEM 文本,公开材料,随 dist/eec.pem 分发;
-#   secrets.ROOT_CA_PEM   根证书 PEM 文本,可选,用于签名后自检证书链。
+#   secrets.WEB_EEC_KEY            网页 EEC 私钥(ECDSA P-256),只在本流程内存中出现;
+#   secrets.WEB_EEC_CERT           网页 EEC 证书 PEM 文本,公开材料,随 dist/eec.pem 分发;
+#   secrets.ROOT_CA_PEM            根证书 PEM 文本,可选,用于签名后自检证书链;
+#   secrets.AUTHOR_SIGN_PRIVATE_KEY 作者私钥(Ed25519),只透传给插件构建产出作者签名。
 # 根证书私钥属于离线签名环境,绝不出现在本流程。
 env:
   WEB_EEC_KEY: ${{ secrets.WEB_EEC_KEY }}
@@ -46,6 +48,12 @@ jobs:
     name: Build distribution
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    # 作者签名由插件仓库的构建产出,构建读取下面两个变量:
+    #   AUTHOR_SIGN_ENABLE= true 时才会签名,其他取值视为关闭;
+    #   AUTHOR_SIGN_PRIVATE_KEY 未配置时把开关降为 false,如实降级为不签名并给出警告,不让构建失败。
+    env:
+      AUTHOR_SIGN_ENABLE: "${{ secrets.AUTHOR_SIGN_PRIVATE_KEY != '' && 'true' || 'false' }}"
+      AUTHOR_SIGN_PRIVATE_KEY: "${{ secrets.AUTHOR_SIGN_PRIVATE_KEY }}"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -68,11 +76,18 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # 按 .github/plugins-sources.json 收录插件;清单为空时脚本直接返回 0。
-      # 收录只复制作者侧分离签名(落为 <文件>.author.sig)与作者公钥,不生成任何合集签名。
+      # 收录只复制作者侧分离签名 plugin.js.author.sig(多签 .2/.3)与作者公钥 author_pub.pem(多签 .2.pem/.3.pem),
+      # 不生成任何合集签名;产物没带作者签名时只警告,该版本仍有整站签名。
       - name: Import plugins
-        run: node scripts/import-plugins.mjs --manifest .github/plugins-sources.json
+        run: |
+          set -euo pipefail
+          if [ -z "${AUTHOR_SIGN_PRIVATE_KEY:-}" ]; then
+            echo "::warning::secrets.AUTHOR_SIGN_PRIVATE_KEY 未配置,插件构建不产出作者签名,本次收录只有整站签名"
+          fi
+          node scripts/import-plugins.mjs --manifest .github/plugins-sources.json
 
       # 自洽性校验: 索引数据、作者公钥、作者签名与版本目录结构。
+      # 作者签名逐位签名者校验,失败只记警告、不阻断(全组织口径);索引结构错误才失败。
       # 这一步不涉及证书链: 插件文件不再由合集 EEC 签名,整站签名在下面的步骤里做。
       - name: Verify collection
         run: pnpm verify

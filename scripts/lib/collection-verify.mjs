@@ -5,19 +5,27 @@
  * 只读取文件,不修改任何内容;build-collection.mjs 与 verify-collection.mjs 共用本模块。
  *
  * 本仓库不再持有「合集 EEC 签发插件」这一层:插件文件的信任由两层构成,
- * 一是 dsc 作为作者用 Ed25519 裸公钥给的 *.author.sig,由本脚本校验;
+ * 一是 dsc 作为作者用 Ed25519 裸公钥给的 plugin.js.author.sig,由本脚本校验;
  * 二是 dsc 用网页 EEC 给 dist/ 整站产物做的 CMS 分离签名,由 sign-site.mjs 产出、
  * verify-site.mjs 校验。因此本脚本只校验索引与作者签名,不再要求任何证书链。
  *
- * 校验语义:本脚本是发布前的强校验,任一项失败都以非零退出码结束;
- * 插件市场一侧的同类校验失败只警告,不阻断。
+ * 作者签名可以有多位签名者:第 1 位是 <文件>.author.sig 配 author_pub.pem,
+ * 第 n 位是 <文件>.author.sig.<n> 配 author_pub.<n>.pem。逐个校验,结果与签名者列表
+ * 一并写进报告,便于界面展示多个签名者。
+ *
+ * 校验语义:索引结构与公钥材料属于发布前的强校验,出错以非零退出码结束;
+ * 作者签名的校验结果一律只记警告(全组织口径:签名失败只警告,不阻断),
+ * 与插件市场一侧的口径保持一致。
  */
-import { readFileSync, statSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import {
   AUTHOR_PUB_FILE,
-  VERSION_SIGNED_FILES,
-  authorSignaturePath,
+  AUTHOR_SIG_SUFFIX,
+  VERSION_AUTHOR_SIGNED_FILES,
+  authorPublicKeyFileName,
+  authorSignerIndexFromKeyName,
+  authorSignerIndexFromSignatureName,
   describePublicKey,
   verifyFileAuthor,
 } from '../pki.mjs'
@@ -26,10 +34,10 @@ import {
 export const ROOT_REQUIRED_FILES = ['meta.json', 'plugins.json']
 /** 版本目录内必需的文件,作者签名不在其中 */
 export const VERSION_REQUIRED_FILES = ['meta.json', 'plugin.js']
-/** 作者目录内的公钥文件名 */
+/** 第 1 个签名者的作者公钥文件名 */
 export const AUTHOR_PUB_RELATIVE = AUTHOR_PUB_FILE
 
-export { VERSION_SIGNED_FILES }
+export { VERSION_AUTHOR_SIGNED_FILES }
 
 const SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 const PLUGIN_NAME_PATTERN = /^(?:dsc-[a-z0-9][a-z0-9._-]*|@[a-z0-9][a-z0-9._-]*\/dsc-[a-z0-9][a-z0-9._-]*)$/
@@ -79,12 +87,17 @@ function parseJsonFile(path, label, report) {
  * @param {string} collectionDir 合集根目录
  * @param {object} [options] 选项
  * @param {string} [options.collectionName] 合集名称,默认取目录名
- * @returns {{ok: boolean, root: string, collectionName: string, errorCount: number, warningCount: number, problems: Array<object>, stats: object}}
+ * @returns {{ok: boolean, root: string, collectionName: string, errorCount: number, warningCount: number, problems: Array<object>, stats: object, signatures: Array<object>}}
  */
 export function verifyCollection(collectionDir, options = {}) {
   const root = resolve(collectionDir)
   const problems = []
-  const stats = { authors: 0, plugins: 0, versions: 0 }
+  const stats = { authors: 0, plugins: 0, versions: 0, authorSignatures: 0 }
+  /**
+   * 每个版本文件的作者签名记录,保留全部签名者,便于后续界面展示多个签名者:
+   * { plugin, version, file, ok, signers: [{ index, signature, publicKey, ok, reason }] }
+   */
+  const signatures = []
   const report = {
     error(code, message, path) {
       problems.push({ level: 'error', code, message, path: path ?? null })
@@ -105,6 +118,7 @@ export function verifyCollection(collectionDir, options = {}) {
       warningCount: problems.length - errorCount,
       problems,
       stats,
+      signatures,
     }
   }
 
@@ -251,7 +265,7 @@ export function verifyCollection(collectionDir, options = {}) {
         'plugins/' + author + '/plugin_manifest.json',
       )
     }
-    inspectPlugin({ authorContext, entry, report, stats })
+    inspectPlugin({ authorContext, entry, report, stats, signatures })
   }
 
   for (const context of authorCache.values()) stats.authors += 1
@@ -265,21 +279,27 @@ function inspectAuthor({ root, author, report }) {
     report.error('AUTHOR_DIR_MISSING', '作者目录不存在:' + authorRel, authorRel)
     return null
   }
-  const pubRel = authorRel + '/' + AUTHOR_PUB_FILE
-  const pubPath = join(authorDir, AUTHOR_PUB_FILE)
-  let publicKeyUsable = false
-  if (!isFile(pubPath)) {
-    report.warn('AUTHOR_PUB_MISSING', '作者公钥不存在:' + pubRel + ',该作者的插件不能带作者签名', pubRel)
-  } else {
+  // 作者公钥按签名者序号配对:序号 1 是 author_pub.pem,序号 n>=2 是 author_pub.<n>.pem
+  const keys = new Map()
+  for (const name of readdirSync(authorDir).sort()) {
+    const index = authorSignerIndexFromKeyName(name)
+    if (index === null) continue
+    const rel = authorRel + '/' + name
+    const path = join(authorDir, name)
+    let usable = false
     try {
-      const info = describePublicKey(pubPath)
-      publicKeyUsable = true
+      const info = describePublicKey(path)
+      usable = true
       if (info.type !== 'ed25519') {
-        report.warn('AUTHOR_PUB_TYPE', pubRel + ' 不是 Ed25519 公钥,约定作者密钥为 Ed25519,实际为 ' + info.firstLine, pubRel)
+        report.warn('AUTHOR_PUB_TYPE', rel + ' 不是 Ed25519 公钥,约定作者密钥为 Ed25519,实际为 ' + info.firstLine, rel)
       }
     } catch (error) {
-      report.error('AUTHOR_PUB_INVALID', pubRel + ' 不是合法的 PEM 公钥:' + error.message, pubRel)
+      report.error('AUTHOR_PUB_INVALID', rel + ' 不是合法的 PEM 公钥:' + error.message, rel)
     }
+    keys.set(index, { index, path, rel, usable })
+  }
+  if (!keys.has(1)) {
+    report.warn('AUTHOR_PUB_MISSING', '作者公钥不存在:' + authorRel + '/' + AUTHOR_PUB_FILE + ',该作者的插件不能带作者签名', authorRel + '/' + AUTHOR_PUB_FILE)
   }
   const manifestRel = authorRel + '/plugin_manifest.json'
   const manifestPath = join(authorDir, 'plugin_manifest.json')
@@ -302,11 +322,12 @@ function inspectAuthor({ root, author, report }) {
       }
     }
   }
-  return { author, authorDir, authorRel, pubPath, pubRel, publicKeyUsable, manifestPlugins }
+  const hasUsableKey = [...keys.values()].some((item) => item.usable)
+  return { author, authorDir, authorRel, keys, hasUsableKey, manifestPlugins }
 }
 
-function inspectPlugin({ authorContext, entry, report, stats }) {
-  const { author, authorDir, authorRel, pubPath, pubRel, publicKeyUsable } = authorContext
+function inspectPlugin({ authorContext, entry, report, stats, signatures }) {
+  const { authorDir, authorRel } = authorContext
   const dirName = entry.plugin_name.split('/').pop()
   const pluginRel = authorRel + '/' + dirName
   const pluginDir = join(authorDir, dirName)
@@ -359,7 +380,16 @@ function inspectPlugin({ authorContext, entry, report, stats }) {
       }
     }
     inspectVersionMeta({ versionDir, versionRel, version, pluginName: entry.plugin_name, report })
-    inspectVersionSignatures({ versionDir, versionRel, report, authorPubPath: pubPath, authorPubRel: pubRel, authorPubUsable: publicKeyUsable, author })
+    inspectVersionAuthorSignatures({
+      versionDir,
+      versionRel,
+      report,
+      authorContext,
+      plugin: entry.plugin_name,
+      version,
+      stats,
+      signatures,
+    })
   }
 }
 
@@ -381,36 +411,92 @@ function inspectVersionMeta({ versionDir, versionRel, version, pluginName, repor
 }
 
 /**
- * 校验版本目录内的作者签名。
- * 作者签名是可选项:没有作者公钥时不校验也不警告,有作者公钥但缺少签名时只警告,
- * 因为整站签名仍然覆盖这两个文件。
+ * 列出某个被签文件在版本目录内的全部作者签名文件。
+ * 命名不合约定的(例如 plugin.js.author.sig.1、plugin.js.author.sig.02)单独返回,
+ * 由上层提示后忽略,不参与校验。
  */
-function inspectVersionSignatures({ versionDir, versionRel, report, authorPubPath, authorPubRel, authorPubUsable, author }) {
-  const unsigned = []
-  for (const name of VERSION_SIGNED_FILES) {
-    const filePath = join(versionDir, name)
-    if (!isFile(filePath)) continue
-    const rel = versionRel + '/' + name
-    const authorSigPath = authorSignaturePath(filePath)
-    if (!isFile(authorSigPath)) {
-      unsigned.push(name)
-      continue
-    }
-    if (!authorPubUsable) {
-      report.error(
-        'AUTHOR_PUB_MISSING',
-        rel + '.author.sig 存在,但 ' + authorPubRel + ' 缺失或不可用,无法校验作者签名',
-        rel + '.author.sig',
-      )
-      continue
-    }
-    const result = verifyFileAuthor(filePath, authorSigPath, authorPubPath)
-    if (!result.ok) {
-      report.error('AUTHOR_SIGN_FAILED', rel + '.author.sig 校验失败,作者 ' + author + ' 的签名与文件不匹配:' + String(result.reason), rel + '.author.sig')
-    }
+function collectAuthorSignatureFiles(versionDir, file) {
+  const found = []
+  const invalid = []
+  const prefix = file + AUTHOR_SIG_SUFFIX
+  for (const name of readdirSync(versionDir).sort()) {
+    if (!name.startsWith(prefix)) continue
+    const index = authorSignerIndexFromSignatureName(name, file)
+    if (index === null) invalid.push(name)
+    else found.push({ index, name, path: join(versionDir, name) })
   }
-  if (authorPubUsable && unsigned.length > 0) {
-    report.warn('AUTHOR_SIGN_MISSING', versionRel + ' 缺少作者签名: ' + unsigned.join('、') + ',这两个文件只有整站签名', versionRel)
+  found.sort((left, right) => left.index - right.index)
+  return { found, invalid }
+}
+
+/**
+ * 逐个校验版本目录内的作者签名。
+ *
+ * 作者签名是可选项:没有作者公钥时不校验也不提示,有作者公钥但缺少签名时只警告,
+ * 因为整站签名仍然覆盖 plugin.js。多位签名者按序号逐个校验,任一签名失败只记警告,
+ * 既不阻断同版本其他签名者的校验,也不阻断发布(全组织口径:签名失败只警告)。
+ * 校验结果连同签名者列表写入 signatures,供界面展示多个签名者。
+ */
+function inspectVersionAuthorSignatures({ versionDir, versionRel, report, authorContext, plugin, version, stats, signatures }) {
+  const { authorRel, keys, hasUsableKey } = authorContext
+  for (const file of VERSION_AUTHOR_SIGNED_FILES) {
+    const filePath = join(versionDir, file)
+    if (!isFile(filePath)) continue
+    const fileRel = versionRel + '/' + file
+    const { found, invalid } = collectAuthorSignatureFiles(versionDir, file)
+    for (const name of invalid) {
+      report.warn(
+        'AUTHOR_SIGN_NAME_INVALID',
+        versionRel + '/' + name + ' 不符合作者签名命名约定,已忽略;多签序号从 2 起写作 ' + file + AUTHOR_SIG_SUFFIX + '.<序号>',
+        versionRel + '/' + name,
+      )
+    }
+
+    const signers = []
+    for (const item of found) {
+      const signatureRel = versionRel + '/' + item.name
+      const publicKeyRel = authorRel + '/' + authorPublicKeyFileName(item.index)
+      const key = keys.get(item.index)
+      if (!key || !key.usable) {
+        const reason = key ? '作者公钥不可用' : '作者公钥缺失'
+        report.warn(
+          'AUTHOR_SIGN_UNVERIFIABLE',
+          signatureRel + ' 存在,但 ' + publicKeyRel + ' ' + (key ? '不可用' : '缺失') + ',第 ' + item.index + ' 个签名者无法校验',
+          signatureRel,
+        )
+        signers.push({ index: item.index, signature: signatureRel, publicKey: publicKeyRel, ok: false, reason })
+        continue
+      }
+      const result = verifyFileAuthor(filePath, item.path, key.path)
+      if (!result.ok) {
+        report.warn(
+          'AUTHOR_SIGN_FAILED',
+          signatureRel + ' 校验失败,签名者 ' + item.index + '(' + key.rel + ')与 ' + fileRel + ' 不匹配:' + String(result.reason),
+          signatureRel,
+        )
+      }
+      signers.push({
+        index: item.index,
+        signature: signatureRel,
+        publicKey: key.rel,
+        ok: result.ok,
+        reason: result.ok ? null : String(result.reason),
+      })
+    }
+
+    if (signers.length === 0) {
+      if (hasUsableKey) {
+        report.warn(
+          'AUTHOR_SIGN_MISSING',
+          fileRel + ' 缺少作者签名(' + file + AUTHOR_SIG_SUFFIX + '),该版本只有整站签名',
+          versionRel,
+        )
+      }
+      continue
+    }
+
+    signatures.push({ plugin, version, file, ok: signers.every((item) => item.ok), signers })
+    stats.authorSignatures += signers.length
   }
 }
 

@@ -7,9 +7,11 @@
  * 单项失败只跳过该项并记录原因,不影响其他项,退出码保持 0。
  *
  * 与旧版 JSON 签名实现的差别:不再处理 plugin_sign.json 与 plugin_secret.pub,
- * 改为复制作者侧分离签名(plugin.js.sig 与 meta.json.sig 分别落为
- * plugin.js.author.sig 与 meta.json.author.sig),以及作者公钥 dist/author_pub.pem
- * 到 plugins/<author>/author_pub.pem。整站签名由 sign-site.mjs 在 dist/ 上生成,收录阶段不做签名。
+ * 改为复制作者侧分离签名与作者公钥。按组织约定,作者签名只覆盖 plugin.js,
+ * 产物与合集内同一个文件名 plugin.js.author.sig;多位签名者依次为
+ * plugin.js.author.sig.<序号>,与 author_pub.<序号>.pem 一一对应。
+ * meta.json 的作者签名已取消,产物里遗留的 meta.json.author.sig 只提示、不复制。
+ * 整站签名由 sign-site.mjs 在 dist/ 上生成,收录阶段不做签名。
  *
  * 用法:
  *   node scripts/import-plugins.mjs
@@ -17,9 +19,16 @@
  *   node scripts/import-plugins.mjs --manifest ./sources.json --keep-temp
  */
 import { spawn } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  AUTHOR_SIG_SUFFIX,
+  VERSION_AUTHOR_SIGNED_FILES,
+  authorPublicKeyFileName,
+  authorSignerIndexFromKeyName,
+  authorSignerIndexFromSignatureName,
+} from './pki.mjs'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const ROOT_DIR = resolve(SCRIPT_DIR, '..')
@@ -36,15 +45,13 @@ const VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 const URL_PATTERN = /^https?:\/\/\S+$/i
 const GIT_PATTERN = /^(?:https:\/\/|git@|git:\/\/|ssh:\/\/)/i
 
-/** dist 内可选的作者分离签名,键为源文件名,值为落盘到版本目录的文件名 */
-const AUTHOR_SIGNATURE_MAP = [
-  { source: 'plugin.js.sig', target: 'plugin.js.author.sig' },
-  { source: 'meta.json.sig', target: 'meta.json.author.sig' },
-]
-/** dist 内的作者公钥文件名 */
-const AUTHOR_PUB_SOURCE = 'author_pub.pem'
-/** 作者目录内的作者公钥文件名 */
-const AUTHOR_PUB_TARGET = 'author_pub.pem'
+/**
+ * 作者签名覆盖的文件,与组织约定一致:只认 plugin.js 的作者签名 plugin.js.author.sig。
+ * 产物与合集内的文件名一致,收录只做复制,不改名。
+ */
+const AUTHOR_SIGNED_FILES = VERSION_AUTHOR_SIGNED_FILES
+/** 已取消的作者签名文件:旧产物里可能还有,一律忽略 */
+const RETIRED_AUTHOR_SIGNATURE = 'meta.json' + AUTHOR_SIG_SUFFIX
 
 function usage() {
   process.stdout.write([
@@ -57,6 +64,8 @@ function usage() {
     '',
     '环境变量:',
     '  IMPORT_BUILD_TIMEOUT_MS   单项构建超时毫秒数,默认 900000',
+    '  AUTHOR_SIGN_ENABLE        设为 true 时由插件构建产出作者签名',
+    '  AUTHOR_SIGN_PRIVATE_KEY   作者私钥,只透传给插件构建,本脚本不读取内容',
     '',
   ].join('\n'))
 }
@@ -134,11 +143,11 @@ function quoteArg(value) {
   return /[\s"]/.test(value) ? '"' + value.replace(/"/g, '\\"') + '"' : value
 }
 
-function run(command, args, cwd) {
+function run(command, args, cwd, extraEnv = {}) {
   return new Promise((resolvePromise, rejectPromise) => {
     const options = {
       cwd,
-      env: { ...process.env, CI: '1', GIT_TERMINAL_PROMPT: '0' },
+      env: { ...process.env, CI: '1', GIT_TERMINAL_PROMPT: '0', ...extraEnv },
       stdio: ['ignore', 'pipe', 'pipe'],
     }
     // Windows 上 pnpm 与 git 需要经 shell 调用,整条命令自行拼接并转义。
@@ -198,9 +207,24 @@ async function prepareSource(item, workDir) {
   return '已克隆 ' + source.url + (item.ref ? ' 的 ' + item.ref : '')
 }
 
+/**
+ * 插件构建读取 AUTHOR_SIGN_ENABLE 与 AUTHOR_SIGN_PRIVATE_KEY 产出作者签名。
+ * 插件仓库在「已开启但缺私钥」时会直接构建失败,那属于配置错误;
+ * 收录这一侧宁可不签名继续跑,因此开启却缺私钥时如实降级为不签名并给出警告。
+ */
+function resolveAuthorSignEnv() {
+  const enable = String(process.env.AUTHOR_SIGN_ENABLE || '').trim().toLowerCase() === 'true'
+  if (!enable) return { env: {}, degraded: false }
+  const key = String(process.env.AUTHOR_SIGN_PRIVATE_KEY || '').trim()
+  if (key !== '') return { env: { AUTHOR_SIGN_ENABLE: 'true' }, degraded: false }
+  return { env: { AUTHOR_SIGN_ENABLE: 'false' }, degraded: true }
+}
+
+const AUTHOR_SIGN = resolveAuthorSignEnv()
+
 async function buildSource(workDir) {
-  await run('pnpm', ['install', '--frozen-lockfile'], workDir)
-  await run('pnpm', ['build'], workDir)
+  await run('pnpm', ['install', '--frozen-lockfile'], workDir, AUTHOR_SIGN.env)
+  await run('pnpm', ['build'], workDir, AUTHOR_SIGN.env)
 }
 
 function readDist(distDir) {
@@ -320,6 +344,33 @@ function validateItem(item, label) {
   return { author, plugin, profile: typeof item.profile === 'string' ? item.profile.trim() : null }
 }
 
+/**
+ * 列出 dist/ 内的作者签名与作者公钥并按序号配对。
+ * 签名文件名形如 plugin.js.author.sig(序号 1)或 plugin.js.author.sig.<序号>,
+ * 公钥文件名形如 author_pub.pem(序号 1)或 author_pub.<序号>.pem。
+ */
+function collectAuthorArtifacts(distDir) {
+  const signatures = []
+  const publicKeys = []
+  const invalid = []
+  for (const name of readdirSync(distDir).sort()) {
+    const keyIndex = authorSignerIndexFromKeyName(name)
+    if (keyIndex !== null) {
+      publicKeys.push({ index: keyIndex, name })
+      continue
+    }
+    for (const file of AUTHOR_SIGNED_FILES) {
+      if (!name.startsWith(file + AUTHOR_SIG_SUFFIX)) continue
+      const sigIndex = authorSignerIndexFromSignatureName(name, file)
+      if (sigIndex === null) invalid.push({ name, file })
+      else signatures.push({ index: sigIndex, name, file })
+      break
+    }
+  }
+  signatures.sort((left, right) => left.index - right.index)
+  return { signatures, publicKeys, invalid }
+}
+
 async function importOne(item, label, options) {
   const { author, plugin, profile } = validateItem(item, label)
   const dirName = plugin.split('/').pop()
@@ -342,29 +393,37 @@ async function importOne(item, label, options) {
     cpSync(metaPath, join(versionDir, 'meta.json'))
     cpSync(jsPath, join(versionDir, 'plugin.js'))
 
-    // 作者分离签名:插件仓库构建出的 <文件>.sig 落为 <文件>.author.sig
-    const copiedSignatures = []
-    for (const mapping of AUTHOR_SIGNATURE_MAP) {
-      const source = join(distDir, mapping.source)
-      if (!existsSync(source)) continue
-      cpSync(source, join(versionDir, mapping.target))
-      copiedSignatures.push(mapping.target)
+    // 作者分离签名与作者公钥:产物与合集同名,按签名者序号整组复制,不改名
+    const artifacts = collectAuthorArtifacts(distDir)
+    for (const wrongName of artifacts.invalid) {
+      logWarning('dist/' + wrongName.name + ' 不符合作者签名命名约定,已忽略;多签序号从 2 起写作 '
+        + wrongName.file + AUTHOR_SIG_SUFFIX + '.<序号>')
     }
-
-    // 作者公钥:随合集分发,供验签方校验作者签名
-    const pubSource = join(distDir, AUTHOR_PUB_SOURCE)
-    let pubCopied = false
-    if (existsSync(pubSource)) {
+    for (const signature of artifacts.signatures) {
+      cpSync(join(distDir, signature.name), join(versionDir, signature.name))
+    }
+    const copiedKeys = []
+    if (artifacts.publicKeys.length > 0) {
       mkdirSync(authorDir, { recursive: true })
-      cpSync(pubSource, join(authorDir, AUTHOR_PUB_TARGET))
-      pubCopied = true
+      for (const publicKey of artifacts.publicKeys) {
+        cpSync(join(distDir, publicKey.name), join(authorDir, publicKey.name))
+        copiedKeys.push(publicKey.name)
+      }
     }
 
-    if (copiedSignatures.length > 0 && !pubCopied && !existsSync(join(authorDir, AUTHOR_PUB_TARGET))) {
-      logWarning('plugins/' + author + '/' + AUTHOR_PUB_TARGET + ' 不存在,作者签名将无法校验')
+    // meta.json 的作者签名已取消:旧产物里可能还带着,只提示,不进版本目录
+    if (existsSync(join(distDir, RETIRED_AUTHOR_SIGNATURE))) {
+      log('  已忽略 dist/' + RETIRED_AUTHOR_SIGNATURE + '(作者签名只覆盖 ' + AUTHOR_SIGNED_FILES.join('、') + ')')
     }
-    if (copiedSignatures.length === 0) {
-      log('  插件未带作者签名,该版本只有整站签名')
+
+    for (const signature of artifacts.signatures) {
+      const keyName = authorPublicKeyFileName(signature.index)
+      if (existsSync(join(authorDir, keyName))) continue
+      logWarning('plugins/' + author + '/' + keyName + ' 不存在,第 ' + signature.index + ' 个签名者的作者签名将无法校验')
+    }
+    if (artifacts.signatures.length === 0) {
+      logWarning('构建产物未带作者签名(' + AUTHOR_SIGNED_FILES.join('、') + AUTHOR_SIG_SUFFIX + '),该版本只有整站签名;'
+        + '插件构建需要在 AUTHOR_SIGN_ENABLE=true 且提供 AUTHOR_SIGN_PRIVATE_KEY 时才会产出作者签名')
     }
 
     const staged = [planVersions(pluginDir, version), planPluginManifest(author, plugin), planPluginsIndex(plugin, author)]
@@ -372,7 +431,7 @@ async function importOne(item, label, options) {
     if (profile) staged.push(planAuthorManifest(author, profile))
 
     applyWrites(staged)
-    return { version, copiedSignatures, pubCopied }
+    return { version, signers: artifacts.signatures.map((signature) => signature.index), copiedKeys }
   } catch (error) {
     if (versionDir) rmSync(versionDir, { recursive: true, force: true })
     throw error
@@ -417,6 +476,9 @@ async function main() {
   }
 
   mkdirSync(TEMP_DIR, { recursive: true })
+  if (AUTHOR_SIGN.degraded) {
+    logWarning('AUTHOR_SIGN_ENABLE 已开启但 AUTHOR_SIGN_PRIVATE_KEY 为空,本次收录降级为不签名,产物只带整站签名')
+  }
   let imported = 0
   let skipped = 0
 
@@ -426,8 +488,8 @@ async function main() {
     log('[' + label + '] ' + name)
     try {
       const result = await importOne(item, label, options)
-      const signatureNote = result.copiedSignatures.length > 0 ? ',作者签名 ' + result.copiedSignatures.join('、') : ''
-      const pubNote = result.pubCopied ? ',已更新作者公钥' : ''
+      const signatureNote = result.signers.length > 0 ? ',作者签名 ' + result.signers.length + ' 个签名者' : ''
+      const pubNote = result.copiedKeys.length > 0 ? ',已更新作者公钥 ' + result.copiedKeys.join('、') : ''
       log('  已收录 ' + name + '@' + result.version + signatureNote + pubNote)
       imported += 1
     } catch (error) {
@@ -436,7 +498,8 @@ async function main() {
     }
   }
 
-  rmSync(TEMP_DIR, { recursive: true, force: true })
+  // --keep-temp 时保留 temp/import/,便于排查单项构建产物
+  if (!options.keepTemp) rmSync(TEMP_DIR, { recursive: true, force: true })
   log('收录汇总: 成功 ' + imported + ' 个,跳过 ' + skipped + ' 个')
   return 0
 }

@@ -18,8 +18,7 @@ plugins/omds-chat/dsc-humanize/
   <x.y.z>/
     meta.json
     plugin.js
-    meta.json.author.sig    可选,产物带 dist/meta.json.sig 时才有
-    plugin.js.author.sig    可选,产物带 dist/plugin.js.sig 时才有
+    plugin.js.author.sig    可选,产物带 dist/plugin.js.author.sig 时才有
 ```
 
 同时把产物里的 `dist/author_pub.pem` 复制为 `plugins/omds-chat/author_pub.pem`,并在根目录 `plugins.json` 追加条目。
@@ -28,12 +27,10 @@ plugins/omds-chat/dsc-humanize/
 
 校验要求 `plugins.json` 的每个条目都有完整版本目录,`meta.json` 与 `plugin.js` 缺一即报错。产物未就位时先写条目会让 `pnpm verify` 与 `pnpm build` 直接失败。因此本目录只声明「将来放这里」,索引条目由收录脚本在产物就位后写入。
 
-## 待对齐的契约差异
+## 契约对齐情况
 
-截至本骨架,插件仓库的构建产出 `dist/plugin.js.author.sig`(带 `.author` 后缀,且只签 `plugin.js`),而本仓库的收录脚本按 `dist/plugin.js.sig` 与 `dist/meta.json.sig` 查找作者签名。命名尚未统一:直接收录会得到「插件未带作者签名」,作者签名不会进入版本目录。
+插件仓库的构建在 `AUTHOR_SIGN_ENABLE=true` 且提供 `AUTHOR_SIGN_PRIVATE_KEY` 时产出 `dist/plugin.js.author.sig` 与 `dist/author_pub.pem`,只签 `plugin.js`;本仓库的收录脚本按同样的文件名查找并原样复制,命名已经统一,不再有「产物签名进不来」的问题。
 
-另外,本仓库的校验在作者公钥可用但缺少 `meta.json.author.sig` 时给出 `AUTHOR_SIGN_MISSING` 警告,只警告不阻断。
-
-正式收录前需要二选一对齐:插件构建把产物改名为 `dist/<文件>.sig`,或收录脚本同时接受 `dist/<文件>.author.sig`。
+多位签名者依次为 `plugin.js.author.sig.<序号>` 与 `author_pub.<序号>.pem`,规则见 [插件目录说明](../../README.md)。产物缺作者签名时只警告,该版本仍受整站签名覆盖;作者签名校验失败同样只警告。
 
 正式收录完成后可以删除本文件。
