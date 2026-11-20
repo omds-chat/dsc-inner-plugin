@@ -2,7 +2,7 @@
 
 dsc 背书的内部插件索引: 收录从 DeepSeek-Chat-Enhanced 本体解耦出来的可选内部插件,整站由 dsc 签名发布。
 
-[English](README.en-US.md)
+[English](README.en-US.md) | [文档索引](docs/index.md)
 
 ## 定位
 
@@ -36,6 +36,7 @@ awesome 侧的版本目录只剩 `plugin.js.sig` 一份合集 CMS 签名,对 `me
 | 文件 | 内容 |
 |:---:|:---:|
 | `plugins.json` | 插件目录索引,每个条目的 `plugin_name` 唯一 |
+| `tags.json` | 插件标签词表,条目里的 `tag` 必须出自这里 |
 | `plugins/author_manifest.json` | 已登记的作者 |
 | `.github/plugins-sources.json` | 收录来源清单,空数组表示未收录插件 |
 | 根目录 `eec.pem` | 不存在;网页 EEC 证书只在签名阶段写入 `dist/` |
@@ -219,7 +220,7 @@ dsc-inner-plugin/
 
 1. 由组织维护者提交 PR 修改 `.github/plugins-sources.json`,每个插件一项,写明 `repo`、可选的 `ref`、`author` 与 `plugin`。字段与收录规则见 [.github/plugins-sources.README.md](.github/plugins-sources.README.md)。
 2. 合并后 CI 依次执行: 克隆或复制源码到 `temp/import/`、`pnpm install --frozen-lockfile`、`pnpm build`、把 `dist/meta.json` 与 `dist/plugin.js` 写入 `plugins/<author>/<plugin>/<version>/`、把 `dist/plugin.js.author.sig`(多签 `.author.sig.<序号>`)原样复制到版本目录、把 `dist/author_pub.pem` 与 `author_pub.<序号>.pem` 复制为 `plugins/<author>/` 下的同名文件,再更新该插件的 `versions.json`、该作者的 `plugin_manifest.json` 与根目录 `plugins.json`。
-3. 人工补充标签。新条目在 `plugins.json` 里的 `tag` 初始为空数组,需要从 `tags.json` 的预设标签中挑选后提交。未在 `tags.json` 中声明的标签会被校验拒绝。
+3. 人工补充标签。新条目在 `plugins.json` 里的 `tag` 初始为空数组,需要从 `tags.json` 的预设标签中挑选后提交。未在 `tags.json` 中声明的标签会被校验拒绝;`tags.json` 缺失同样判为错误,发布中止。
 4. 构建与发布。CI 依次执行 `pnpm verify`(自洽性校验,不涉及证书链)、`pnpm build`(生成 `dist/`)、`scripts/sign-site.mjs`(用 `secrets.WEB_EEC_KEY` 做整站签名)、`scripts/verify-site.mjs`(签名自检),最后把 `dist/` 发布到 Pages。
 
 收录环节任何一步失败只跳过该插件并在日志里写明原因,其余插件照常处理。校验、构建与签名环节失败则整个构建中止。
@@ -239,7 +240,7 @@ dsc-inner-plugin/
 
 1. 组织维护者在 `.github/plugins-sources.json` 增加一项,写 `repo`、可选 `ref`、`author` 与 `plugin`,可附 `profile` 登记作者主页。字段见 [.github/plugins-sources.README.md](.github/plugins-sources.README.md)。
 2. 合并后由 CI 收录:建版本目录、复制 `dist/meta.json` 与 `dist/plugin.js`、把 `dist/plugin.js.author.sig`(多签 `.author.sig.<序号>`)原样复制到版本目录、把 `dist/author_pub.pem` 与 `author_pub.<序号>.pem` 复制为 `plugins/<author>/` 下的同名文件,再更新 `versions.json`、`plugin_manifest.json`、`author_manifest.json` 与 `plugins.json`。
-3. 组织维护者从 `tags.json` 挑标签补进 `plugins.json`;未在 `tags.json` 声明的标签会被校验拒绝。
+3. 组织维护者从 `tags.json` 挑标签补进 `plugins.json`;未在 `tags.json` 声明的标签会被校验拒绝,`tags.json` 缺失也会让校验与构建中止。
 4. CI 校验并签名:`pnpm verify` 通过后 `pnpm build` 生成 `dist/`,再用 `scripts/sign-site.mjs` 做整站签名,最后由 `scripts/verify-site.mjs` 自检,全部通过才发布 Pages。
 
 目录与清单不手写。产物就位前把条目写进 `plugins.json` 会让校验失败,因为每个条目都要求完整的版本目录;作者公钥与作者签名也只在产物存在时才有,索引里不生成。当前 `dsc-humanize` 只建到作者目录与作者清单,`plugins.json` 仍为空,产物与签名都没有进入本仓库。规则与占位说明见 [plugins/README.md](plugins/README.md)。
@@ -256,6 +257,17 @@ dsc-inner-plugin/
 | `tooling` | 开发、调试与构建工具 |
 
 标签必须从 `tags.json` 中取,未声明的标签会被校验拒绝。
+
+`tags.json` 与 `meta.json`、`plugins.json` 同为根目录必需文件。缺词表时「标签必须出自预设词表」这条校验会整段失效,因此缺文件判为 `TAGS_MISSING` 错误: `pnpm verify` 失败,`pnpm build` 在写出 `dist/` 之前中止,不降级为警告。空词表与缺词表不同: 空数组仍会执行校验,任何非空标签都会被 `TAG_NOT_DECLARED` 拒绝。
+
+| 错误码 | 级别 | 触发条件 | 处理 |
+|:---:|:---:|:---:|:---:|
+| `TAGS_MISSING` | 错误 | 根目录没有 `tags.json` | 补回词表;校验与构建均中止 |
+| `TAGS_INVALID` | 错误 | 顶层不是字符串数组,或含空字符串项 | 按词表格式修 `tags.json` |
+| `TAGS_DUPLICATE` | 警告 | 词表内出现重复标签 | 去重;不阻断发布 |
+| `TAG_NOT_DECLARED` | 错误 | `plugins.json` 条目的标签不在词表内 | 改标签,或先扩词表再提交 |
+
+四者都由 `scripts/lib/collection-verify.mjs` 产出,`pnpm verify --json` 的 `problems[].code` 与上表一致。词表本身不是合法 JSON 时归入 `JSON_INVALID`,文件存在但读取失败时归入 `FILE_UNREADABLE`,两者同样是错误。
 
 ## 跨域访问
 
@@ -275,6 +287,7 @@ pnpm run import              # 按来源清单收录插件
 ```
 
 - `pnpm verify` 与 `pnpm build` 不涉及任何证书,空索引也能直接通过。
+- 根目录必需文件为 `meta.json`、`plugins.json`、`tags.json`;缺任一项都以错误结束,其中缺 `tags.json` 的错误码是 `TAGS_MISSING`。
 - 整站签名需要网页 EEC 私钥。私钥用 `--key` 或环境变量 `WEB_EEC_KEY` 指定,证书用 `--eec` 或 `WEB_EEC_CERT` 指定,两者都可以是 PEM 文本或文件路径。
 - 缺少私钥或证书时 `sign-site.mjs` 只警告并保留未签名 `dist/`,方便本地调试;CI 传 `--require-key`,把这种缺失当错误。
 - `verify-site.mjs` 给出 `--root-ca` 时做完整证书链校验,不给时只做签名完整性校验。

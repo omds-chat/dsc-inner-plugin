@@ -99,7 +99,7 @@
 | 环节 | 执行者 | 写入位置 | 说明 |
 |:---:|:---:|:---:|:---:|
 | 目录 | CI 收录脚本 `scripts/import-plugins.mjs` | `plugins/<author>/<plugin>/<x.y.z>/` 与 `versions.json` | 目录名与版本号取自产物 `meta.json`,不手工建 |
-| 清单 | 组织维护者声明来源,CI 写入清单 | `.github/plugins-sources.json`、`plugins/author_manifest.json`、`plugins/<author>/plugin_manifest.json`、`plugins.json` | 来源清单是唯一人工入口;新条目 `tag` 留空 |
+| 清单 | 组织维护者声明来源,CI 写入清单 | `.github/plugins-sources.json`、`plugins/author_manifest.json`、`plugins/<author>/plugin_manifest.json`、`plugins.json` | 来源清单是唯一人工入口;新条目 `tag` 留空,事后从根目录 `tags.json` 补 |
 | 签名 | 作者签名由插件仓库构建产出,整站签名由 CI 产出 | 版本目录的 `plugin.js.author.sig`(多签 `.author.sig.<n>`)、`plugins/<author>/author_pub.pem`、`author_pub.<n>.pem` 与 `dist/<文件>.sig`、`web_files.json`、`eec.pem` | 本仓库不生成任何签名,只接收产物并在 `dist/` 上签整站 |
 | 校验 | CI 与插件市场 | 只读 | CI 跑 `pnpm verify`、`pnpm build`、`pnpm verify:site`;市场按根目录 README 的顺序复核 |
 
@@ -107,7 +107,7 @@
 
 - 作者签名:由插件仓库的构建完成。dsc 作为作者用 Ed25519 私钥只签 `plugin.js`,产物是 `dist/plugin.js.author.sig` 与 `dist/author_pub.pem`(多签再加 `.author.sig.<n>` 与 `author_pub.<n>.pem`);收录脚本把同名文件原样复制进版本目录与作者目录,不重新签名、不改名。
 - 整站签名:由本仓库 CI 的 `scripts/sign-site.mjs` 完成,需要 `secrets.WEB_EEC_KEY` 与 `secrets.WEB_EEC_CERT`,覆盖 `dist/` 内全部 `.html`、`.js`、`.css`、`.json`。签名只落在 `dist/`,`plugins/` 源码目录不出现整站签名文件。
-- 校验:索引结构与公钥材料的错误在 CI 侧阻断发布;作者签名的校验结果一律只记警告,逐位签名者给出结论,不阻断发布,与插件市场侧口径一致。
+- 校验:索引结构与公钥材料的错误在 CI 侧阻断发布,标签不在根目录 `tags.json` 词表内同样阻断;作者签名的校验结果一律只记警告,逐位签名者给出结论,不阻断发布,与插件市场侧口径一致。
 
 当前状态:作者目录 `plugins/omds-chat/` 与作者清单已按本规范建好,`plugin_manifest.json` 登记 `dsc-humanize`;`plugins.json` 仍为空,因为条目要求完整版本目录,产物未就位时写入会直接让校验失败。
 
@@ -128,4 +128,4 @@ plugins/
         plugin.js.author.sig.2
 ```
 
-源码目录不含证书:根目录只有 `meta.json`、`plugins.json`、`tags.json` 三个索引文件,含义见根目录 [README](../README.md)。网页 EEC 证书只在签名阶段进入 `dist/`,不进入源码仓库。
+源码目录不含证书:根目录只有 `meta.json`、`plugins.json`、`tags.json` 三个索引文件,含义见根目录 [README](../README.md)。三者都是必需文件:缺 `tags.json` 时报 `TAGS_MISSING` 错误,校验与构建一并中止,因为缺词表会让标签校验整段失效。网页 EEC 证书只在签名阶段进入 `dist/`,不进入源码仓库。

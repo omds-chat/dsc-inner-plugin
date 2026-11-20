@@ -2,7 +2,7 @@
 
 The internal plugin index endorsed by dsc: it lists optional in-house plugins decoupled from the DeepSeek-Chat-Enhanced codebase, and dsc signs the whole site at publish time.
 
-[简体中文](README.md)
+[简体中文](README.md) | [Documentation index](docs/index.md)
 
 ## Scope
 
@@ -36,6 +36,7 @@ Index content comes only from the data files and the `plugins/` directory; no pl
 | File | Content |
 |:---:|:---:|
 | `plugins.json` | plugin directory index, unique `plugin_name` per entry |
+| `tags.json` | plugin tag vocabulary; every entry's `tag` must come from it |
 | `plugins/author_manifest.json` | registered authors |
 | `.github/plugins-sources.json` | source manifest, an empty array means no plugin is listed |
 | root `eec.pem` | absent; the web EEC certificate enters `dist/` only at signing time |
@@ -219,7 +220,7 @@ Counting is off for this index.
 
 1. An organisation maintainer opens a pull request against `.github/plugins-sources.json`, one entry per plugin, with `repo`, an optional `ref`, `author` and `plugin`. Field and import rules are in [.github/plugins-sources.README.md](.github/plugins-sources.README.md).
 2. After merge, CI clones or copies the source into `temp/import/`, runs `pnpm install --frozen-lockfile` and `pnpm build`, writes `dist/meta.json` and `dist/plugin.js` into `plugins/<author>/<plugin>/<version>/`, copies `dist/plugin.js.author.sig` (and `.author.sig.<index>` for co-signers) into the version directory unchanged, copies `dist/author_pub.pem` and `author_pub.<index>.pem` into `plugins/<author>/` under the same names, then updates that plugin's `versions.json`, that author's `plugin_manifest.json` and the root `plugins.json`.
-3. Add tags by hand. New index entries start with an empty `tag` array and need tags picked from `tags.json`. Undeclared tags are rejected by verification.
+3. Add tags by hand. New index entries start with an empty `tag` array and need tags picked from `tags.json`. Undeclared tags are rejected by verification; a missing `tags.json` is an error as well and stops publication.
 4. Build and publish. CI runs `pnpm verify` (consistency check, no certificate chain involved), `pnpm build` (produce `dist/`), `scripts/sign-site.mjs` (site-wide signing with `secrets.WEB_EEC_KEY`) and `scripts/verify-site.mjs` (signature self-check), then publishes `dist/` to Pages.
 
 A failing import step skips that one plugin and logs the reason; the rest still run. A failing verification, build or signing step aborts the whole build.
@@ -239,7 +240,7 @@ Step by step, for one pull request:
 
 1. An organisation maintainer adds one entry to `.github/plugins-sources.json` with `repo`, an optional `ref`, `author` and `plugin`, plus an optional `profile` to register the author page. Field rules are in [.github/plugins-sources.README.md](.github/plugins-sources.README.md).
 2. After merge, CI imports: it creates the version directory, copies `dist/meta.json` and `dist/plugin.js`, copies `dist/plugin.js.author.sig` (and `.author.sig.<index>` for co-signers) into it unchanged, copies `dist/author_pub.pem` and `author_pub.<index>.pem` into `plugins/<author>/` under the same names, and updates `versions.json`, `plugin_manifest.json`, `author_manifest.json` and `plugins.json`.
-3. The maintainer adds tags picked from `tags.json` to `plugins.json`; tags not declared there are rejected by verification.
+3. The maintainer adds tags picked from `tags.json` to `plugins.json`; tags not declared there are rejected by verification, and a missing `tags.json` also stops verification and the build.
 4. CI verifies and signs: `pnpm verify` must pass, `pnpm build` produces `dist/`, `scripts/sign-site.mjs` signs the whole site, and `scripts/verify-site.mjs` checks the result before Pages is published.
 
 Directories and manifests are never written by hand. Adding an entry to `plugins.json` before the artifact exists makes verification fail, because every entry requires a complete version directory; the author public key and author signatures exist only when the artifact provides them, and the index never generates them. `dsc-humanize` is currently built only up to the author directory and the author manifest, `plugins.json` is still empty, and neither artifacts nor signatures have entered this repository. Rules and placeholder notes are in [plugins/README.md](plugins/README.md).
@@ -256,6 +257,17 @@ Directories and manifests are never written by hand. Adding an entry to `plugins
 | `tooling` | development, debugging and build tools |
 
 Tags must come from `tags.json`; undeclared tags are rejected by verification.
+
+`tags.json` is a required root file, on par with `meta.json` and `plugins.json`. Without the vocabulary the whole rule "tags must come from the preset list" silently stops running, so a missing file is a `TAGS_MISSING` error: `pnpm verify` fails and `pnpm build` aborts before writing `dist/`; it is never downgraded to a warning. An empty vocabulary differs from a missing one: an empty array still runs the check, and every non-empty tag is rejected with `TAG_NOT_DECLARED`.
+
+| Code | Level | When it fires | Action |
+|:---:|:---:|:---:|:---:|
+| `TAGS_MISSING` | error | the root has no `tags.json` | restore the vocabulary; verification and the build both stop |
+| `TAGS_INVALID` | error | the top level is not an array of strings, or contains an empty string | fix `tags.json` to the vocabulary format |
+| `TAGS_DUPLICATE` | warning | the vocabulary repeats a tag | remove the duplicate; publication is not blocked |
+| `TAG_NOT_DECLARED` | error | a `plugins.json` entry uses a tag outside the vocabulary | change the tag, or extend the vocabulary first |
+
+All four come from `scripts/lib/collection-verify.mjs`; `problems[].code` in `pnpm verify --json` uses the same names. A vocabulary that is not valid JSON is reported as `JSON_INVALID`, and an existing file that cannot be read is reported as `FILE_UNREADABLE`; both are errors as well.
 
 ## Cross-origin access
 
@@ -275,6 +287,7 @@ pnpm run import              # import plugins from the source manifest
 ```
 
 - `pnpm verify` and `pnpm build` involve no certificate and pass on an empty index.
+- The required root files are `meta.json`, `plugins.json` and `tags.json`; a missing one ends with an error, and the code for a missing `tags.json` is `TAGS_MISSING`.
 - Site-wide signing needs the web EEC private key. The key comes from `--key` or the `WEB_EEC_KEY` environment variable; the certificate comes from `--eec` or `WEB_EEC_CERT`. Both accept PEM text or a file path.
 - When the key or the certificate is missing, `sign-site.mjs` only warns and keeps an unsigned `dist/`, which suits local debugging. CI passes `--require-key` and treats the same condition as an error.
 - `verify-site.mjs` verifies the full certificate chain when `--root-ca` is given, and only checks signature integrity otherwise.

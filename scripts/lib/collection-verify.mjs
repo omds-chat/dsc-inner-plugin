@@ -33,8 +33,8 @@ import {
   verifyFileAuthor,
 } from '../pki.mjs'
 
-/** 合集根目录必需的文件 */
-export const ROOT_REQUIRED_FILES = ['meta.json', 'plugins.json']
+/** 合集根目录必需的文件。tags.json 是标签词表,缺词表等于不校验标签,不能当作可选文件 */
+export const ROOT_REQUIRED_FILES = ['meta.json', 'plugins.json', 'tags.json']
 /** 版本目录内必需的文件,作者签名不在其中 */
 export const VERSION_REQUIRED_FILES = ['meta.json', 'plugin.js']
 /** 第 1 个签名者的作者公钥文件名 */
@@ -132,7 +132,17 @@ export function verifyCollection(collectionDir, options = {}) {
 
   // 一、根目录必需文件
   for (const name of ROOT_REQUIRED_FILES) {
-    if (!isFile(join(root, name))) report.error('ROOT_FILE_MISSING', '根目录缺少必需文件 ' + name, name)
+    if (isFile(join(root, name))) continue
+    if (name === 'tags.json') {
+      // 单独的错误码: 缺词表会让标签校验整段失效,必须说明后果而不是只报告文件缺失
+      report.error(
+        'TAGS_MISSING',
+        '根目录缺少必需文件 tags.json: 没有标签词表就无法校验插件标签,发布必须带标签词表',
+        name,
+      )
+    } else {
+      report.error('ROOT_FILE_MISSING', '根目录缺少必需文件 ' + name, name)
+    }
   }
 
   // 二、合集元数据
@@ -154,6 +164,7 @@ export function verifyCollection(collectionDir, options = {}) {
   }
 
   // 三、预设标签
+  // tags.json 已在根目录必需文件里检查过: 缺失时上面报 TAGS_MISSING 并阻断,这里的 tagSet 保持 null 只用于跳过后续校验。
   const tagsPath = join(root, 'tags.json')
   let tagSet = null
   if (isFile(tagsPath)) {
