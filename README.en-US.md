@@ -202,6 +202,26 @@ Counting is off for this index.
 
 A failing import step skips that one plugin and logs the reason; the rest still run. A failing verification, build or signing step aborts the whole build.
 
+## Adding an in-house plugin
+
+Listing a plugin runs through four stages - directory, manifests, signing and verification - and each stage has a different owner. The only manual changes in this repository are the source manifest, the tags and the documentation; the import script, the plugin repository's build and CI do the rest.
+
+| Stage | Owner | Where it is written | How it is triggered |
+|:---:|:---:|:---:|:---:|
+| Directory | CI import script | `plugins/<author>/<plugin>/<x.y.z>/` and `versions.json` | `node scripts/import-plugins.mjs --manifest .github/plugins-sources.json` |
+| Manifests | an organisation maintainer declares the source, CI writes the manifests | `.github/plugins-sources.json`, `plugins/author_manifest.json`, `plugins/<author>/plugin_manifest.json`, `plugins.json` | a maintainer pull request, then the same import run; tags are added by hand |
+| Signing | the author signature comes from the plugin repository's build, the site-wide signature from CI | `*.author.sig` in the version directory and `plugins/<author>/author_pub.pem`; `dist/<file>.sig`, `web_files.json`, `eec.pem` | artifact signatures are copied during import; the signing step runs `scripts/sign-site.mjs` with `secrets.WEB_EEC_KEY` and `secrets.WEB_EEC_CERT` |
+| Verification | CI and the plugin market | read-only | CI runs `pnpm verify`, `pnpm build` and `pnpm verify:site` in order; the market replays "How the market verifies this source" |
+
+Step by step, for one pull request:
+
+1. An organisation maintainer adds one entry to `.github/plugins-sources.json` with `repo`, an optional `ref`, `author` and `plugin`, plus an optional `profile` to register the author page. Field rules are in [.github/plugins-sources.README.md](.github/plugins-sources.README.md).
+2. After merge, CI imports: it creates the version directory, copies `dist/meta.json` and `dist/plugin.js`, stores `dist/plugin.js.sig` and `dist/meta.json.sig` as `*.author.sig`, stores `dist/author_pub.pem` as `plugins/<author>/author_pub.pem`, and updates `versions.json`, `plugin_manifest.json`, `author_manifest.json` and `plugins.json`.
+3. The maintainer adds tags picked from `tags.json` to `plugins.json`; tags not declared there are rejected by verification.
+4. CI verifies and signs: `pnpm verify` must pass, `pnpm build` produces `dist/`, `scripts/sign-site.mjs` signs the whole site, and `scripts/verify-site.mjs` checks the result before Pages is published.
+
+Directories and manifests are never written by hand. Adding an entry to `plugins.json` before the artifact exists makes verification fail, because every entry requires a complete version directory; the author public key and author signatures exist only when the artifact provides them, and the index never generates them. `dsc-humanize` is currently built only up to the author directory and the author manifest, `plugins.json` is still empty, and neither artifacts nor signatures have entered this repository. Rules and placeholder notes are in [plugins/README.md](plugins/README.md).
+
 ## Preset tags
 
 `tags.json` is the tag table of this index, written from an in-house point of view and different from the preset tags of the community collection:

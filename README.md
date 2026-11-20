@@ -202,6 +202,26 @@ dsc-inner-plugin/
 
 收录环节任何一步失败只跳过该插件并在日志里写明原因,其余插件照常处理。校验、构建与签名环节失败则整个构建中止。
 
+## 新增内部插件的步骤
+
+收录一个内部插件分目录、清单、签名与校验四个环节,执行者不同:本仓库的人工改动只有来源清单、标签与文档,其余由收录脚本、插件仓库构建与 CI 完成。
+
+| 环节 | 执行者 | 写入位置 | 触发方式 |
+|:---:|:---:|:---:|:---:|
+| 目录 | CI 收录脚本 | `plugins/<author>/<plugin>/<x.y.z>/` 与 `versions.json` | `node scripts/import-plugins.mjs --manifest .github/plugins-sources.json` |
+| 清单 | 组织维护者声明来源,CI 写入清单 | `.github/plugins-sources.json`、`plugins/author_manifest.json`、`plugins/<author>/plugin_manifest.json`、`plugins.json` | 维护者 PR 后由同一次收录写入;标签人工补 |
+| 签名 | 作者签名由插件仓库构建完成,整站签名由 CI 完成 | 版本目录的 `*.author.sig` 与 `plugins/<author>/author_pub.pem`;`dist/<文件>.sig`、`web_files.json`、`eec.pem` | 收录时复制产物签名;签名步骤用 `secrets.WEB_EEC_KEY` 与 `secrets.WEB_EEC_CERT` 执行 `scripts/sign-site.mjs` |
+| 校验 | CI 与插件市场 | 只读 | CI 依次跑 `pnpm verify`、`pnpm build`、`pnpm verify:site`;市场按「市场如何校验本来源」复核 |
+
+具体到一次 PR:
+
+1. 组织维护者在 `.github/plugins-sources.json` 增加一项,写 `repo`、可选 `ref`、`author` 与 `plugin`,可附 `profile` 登记作者主页。字段见 [.github/plugins-sources.README.md](.github/plugins-sources.README.md)。
+2. 合并后由 CI 收录:建版本目录、复制 `dist/meta.json` 与 `dist/plugin.js`、把 `dist/plugin.js.sig` 与 `dist/meta.json.sig` 落为 `*.author.sig`、把 `dist/author_pub.pem` 落为 `plugins/<author>/author_pub.pem`,再更新 `versions.json`、`plugin_manifest.json`、`author_manifest.json` 与 `plugins.json`。
+3. 组织维护者从 `tags.json` 挑标签补进 `plugins.json`;未在 `tags.json` 声明的标签会被校验拒绝。
+4. CI 校验并签名:`pnpm verify` 通过后 `pnpm build` 生成 `dist/`,再用 `scripts/sign-site.mjs` 做整站签名,最后由 `scripts/verify-site.mjs` 自检,全部通过才发布 Pages。
+
+目录与清单不手写。产物就位前把条目写进 `plugins.json` 会让校验失败,因为每个条目都要求完整的版本目录;作者公钥与作者签名也只在产物存在时才有,索引里不生成。当前 `dsc-humanize` 只建到作者目录与作者清单,`plugins.json` 仍为空,产物与签名都没有进入本仓库。规则与占位说明见 [plugins/README.md](plugins/README.md)。
+
 ## 预设标签
 
 `tags.json` 是本索引的标签表,取组织自研视角,与社区合集的预设标签不同:
