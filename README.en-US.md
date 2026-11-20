@@ -22,10 +22,12 @@ This repository is an internal plugin index, not a community collection and not 
 | What it lists | optional in-house plugins decoupled from DeepSeek-Chat-Enhanced, built by dsc | third-party plugins from community submissions |
 | Trust anchor | the dsc web EEC signs the whole site | a collection EEC signs plugin files |
 | Plugin file signatures | dsc signs `plugin.js.author.sig` as the author | authors sign `*.author.sig`, the collection adds CMS signatures |
-| Version directory | `meta.json`, `plugin.js`, `plugin.js.author.sig` | `meta.json`, `plugin.js`, two CMS signatures, author signatures |
-| Certificate in the repository root | none, certificates appear only in `dist/` | `eec.pem` |
+| Version directory | `meta.json`, `plugin.js`, `plugin.js.author.sig` (optional) | `meta.json`, `plugin.js`, `plugin.js.sig`, `plugin.js.author.sig` (optional) |
+| Certificate in the repository root | none, certificates appear only in `dist/` | none, the collection certificate lives in `certs/<source id>/` |
 | Market verification order | verify the Pages site signatures first, then author signatures | verify the collection EEC chain first, then plugin signatures |
 | Install channel | ordinary dsc-market channel with a soft security gate | the same |
+
+On the awesome side the version directory now carries a single collection CMS signature, `plugin.js.sig`; the signature over `meta.json` (`meta.json.sig`) has been retired, and `plugin.js.author.sig` is kept but optional. There is no `eec.pem` in the repository root either: the collection certificate lives under `certs/<source id>/`, one folder per source. The difference between the two layouts is who signs the plugin files, not how many signature files exist.
 
 ## Index files
 
@@ -80,7 +82,7 @@ Root CA (O=omds-chat, CN=DeepSeek-Chat-Enhanced ROOT CA; offline, root_ca.crt is
       │  issues
       ▼
 dsc web EEC (O=omds-chat, CN=dsc-inner-plugin; CI secrets: WEB_EEC_KEY / WEB_EEC_CERT)
-      │  openssl cms -sign -binary -outform DER
+      │  openssl cms -sign -binary -md sha512 -outform DER
       ▼
 dist/<file>.sig
 dist/web_files.json.sig
@@ -92,10 +94,12 @@ dist/web_files.json.sig
 | Root certificate | X.509 self-signed, subject `O=omds-chat, CN=DeepSeek-Chat-Enhanced ROOT CA`, `keyUsage=critical,keyCertSign,cRLSign`, `basicConstraints=critical,CA:TRUE,pathlen:0`, valid 3650 days |
 | Web EEC key | ECDSA P-256 |
 | Web EEC certificate | issued by the root CA, subject `O=omds-chat, CN=dsc-inner-plugin`, `keyUsage=critical,digitalSignature`, `basicConstraints=critical,CA:FALSE`, valid 365 days |
-| Site-wide signature | CMS detached signature, `openssl cms -sign -binary -outform DER -nocerts -noattr`, one `<file>.sig` per file |
+| Site-wide signature | CMS detached signature, `openssl cms -sign -binary -md sha512 -outform DER -nocerts -noattr`, one `<file>.sig` per file |
 | Author signature | bare-public-key detached signature, `openssl pkeyutl -sign -rawin`, Ed25519 author keys |
 
 The web EEC must be ECDSA P-256, not Ed25519: OpenSSL's CMS implementation reports `provider signature failure` when signing with an Ed25519 key, so it is unusable in practice.
+
+Both signing and verification pass `-md sha512` explicitly and never rely on the OpenSSL default digest. The default varies with the version and with how the distribution was built (OpenSSL 3.x defaults to `sha256`), so a drift in that default makes the same artifact fail verification on another machine, with no visible cause. Stating the digest also keeps both sides byte-for-byte aligned, so a verifier never has to guess which digest the signer used.
 
 The site-wide signature covers only `.html`, `.js`, `.css` and `.json`. `eec.pem` is the certificate itself and is read directly by the market; author signatures `plugin.js.author.sig` (and `.author.sig.<n>` for co-signers) are not covered by the site-wide signature, because they have their own verification path.
 
@@ -107,6 +111,7 @@ dsc is also the plugin author, and signs `plugin.js` of every version with an Ed
 - The author signature has the same file name in the artifact and in the collection, `plugin.js.author.sig`; import only copies it and never renames it.
 - One author can have several signers, paired by index as described in "Multi-signature naming" below.
 - Author signatures are optional, but they are the default for in-house plugins. The plugin repository's build produces one only when `AUTHOR_SIGN_ENABLE=true` and `AUTHOR_SIGN_PRIVATE_KEY` are set; a missing author signature during import only produces a warning, and that version is still covered by the site-wide signature.
+- The signature file and the author public key are paired by index, and both are required. A signature file without its public key makes that signer unverifiable (failed); a public key without a signature file makes the author signature of that version missing (unverified). Neither case counts as a pass, and both are warnings only, never blocking a release.
 - Each signer is verified in turn, and any failure is reported as a warning only, never blocking a release (the organisation-wide rule: signature failures only warn). The verification result keeps the full signer list so the market can display multiple signers.
 
 ### Multi-signature naming

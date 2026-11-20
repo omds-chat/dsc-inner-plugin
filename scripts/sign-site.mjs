@@ -10,7 +10,8 @@
  *   由 verify-collection.mjs 校验。
  *
  * 索引数据(plugins.json、versions.json、各 meta.json)决定市场显示什么,因此一并签名。
- * 签名是对文件原始字节的 CMS 分离签名,固定 -binary -outform DER,与 dsce 的 sign-web 同一套机制。
+ * 签名是对文件原始字节的 CMS 分离签名,固定 -binary -md sha512 -outform DER,与 dsce 的 sign-web 同一套机制。
+ * -md sha512 与验签侧显式对齐:摘要算法不依赖 OpenSSL 的默认值,避免默认摘要随版本漂移后旧签名验不过。
  *
  * 私钥只从环境变量 WEB_EEC_KEY 或 --key 读取,证书从 --eec 或环境变量 WEB_EEC_CERT 读取,
  * 两者都可以是 PEM 文本或文件路径。缺私钥或证书时不产出任何签名,只在日志里警告并返回 0,
@@ -217,7 +218,7 @@ function main() {
     process.stdout.write('[签名] 证书: ' + String(info.subject) + '\n')
     process.stdout.write('[签名]   sha256: ' + String(info.fingerprint) + '\n')
     process.stdout.write('[签名]   有效期: ' + String(info.notBefore) + ' -> ' + String(info.notAfter) + '\n')
-    process.stdout.write('[签名] 已签名 ' + targets.length + ' 个文件,输出 <文件>.sig(CMS 分离签名, -binary -outform DER)\n')
+    process.stdout.write('[签名] 已签名 ' + targets.length + ' 个文件,输出 <文件>.sig(CMS 分离签名, -binary -md sha512 -outform DER)\n')
     if (removed > 0) process.stdout.write('[签名] 已清理孤儿签名 ' + removed + ' 个\n')
     process.stdout.write('[签名] 已写出清单 ' + WEB_MANIFEST_FILE + ' 及其签名 ' + WEB_MANIFEST_FILE + SITE_SIGNATURE_SUFFIX + '\n')
     process.stdout.write('[签名] 已写出证书 ' + EEC_CERT_FILE + '\n')

@@ -10,8 +10,9 @@
  *   (浏览器 WebCrypto 对 P-256 支持最广;证书链校验要在浏览器里做,Ed25519 在目标浏览器下限不可用)
  * - EEC 密钥 ECDSA P-256;OpenSSL 的 CMS 实现对 Ed25519 报 provider signature failure,不可用
  * - EEC 证书 keyUsage=critical,digitalSignature,basicConstraints=critical,CA:FALSE
- * - 网页签名 openssl cms -sign -binary -outform DER -nocerts -noattr,产出逐字节语义的 DER 格式 CMS 分离签名
+ * - 网页签名 openssl cms -sign -binary -md sha512 -outform DER -nocerts -noattr,产出逐字节语义的 DER 格式 CMS 分离签名
  *   DER 是跨仓库统一格式:默认的 S/MIME multipart/signed 包装浏览器无法解析,插件市场要在浏览器里验签
+ *   -md sha512 在签名与验签两侧都必须显式写出,不依赖 OpenSSL 的默认摘要(默认是 sha256,会随版本与构建配置漂移)
  *   本仓库只用它签整站产物(见 sign-site.mjs),不再用它给插件文件生成合集签名
  * - 作者签名 openssl pkeyutl -sign -rawin(Ed25519),产出裸公钥分离签名,
  *   只覆盖 plugin.js,文件名为 plugin.js.author.sig;多签名者依次为 plugin.js.author.sig.<序号>,
@@ -345,6 +346,9 @@ export function issueEec(csrPath, rootCertPath, rootKeyPath, outPath, options = 
  * 与作者裸公钥签名(pkeyutl -rawin)的逐字节语义保持一致。
  * 固定加 -outform DER:默认的 S/MIME multipart/signed 包装浏览器无法解析,
  * 而插件市场要在浏览器里验签,因此 DER 是跨仓库统一格式,验签方必须带 -inform DER。
+ * 固定加 -md sha512:摘要算法一律显式指定,签名与验签都拿它对齐;
+ * 不依赖默认值是因为 OpenSSL 的默认摘要随版本与发行版构建变化(3.x 默认 sha256),
+ * 一旦默认值漂移,同一份产物会在换了 OpenSSL 的机器上验不过,而这种失败无法从产物本身看出来。
  * @param {string} filePath 待签名文件
  * @param {string} eecCertPath EEC 证书
  * @param {string} eecKeyPath EEC 私钥
@@ -358,13 +362,14 @@ export function signFileCms(filePath, eecCertPath, eecKeyPath, options = {}) {
   requireFile(eecKeyPath, 'EEC 私钥')
   const sigPath = options.out || cmsSignaturePath(filePath)
   ensureDirFor(sigPath)
-  run(['cms', '-sign', '-binary', '-outform', 'DER', '-in', filePath, '-out', sigPath, '-signer', eecCertPath, '-inkey', eecKeyPath, '-nocerts', '-noattr'])
+  run(['cms', '-sign', '-binary', '-md', 'sha512', '-outform', 'DER', '-in', filePath, '-out', sigPath, '-signer', eecCertPath, '-inkey', eecKeyPath, '-nocerts', '-noattr'])
   return requireOutput(sigPath, 'CMS 签名')
 }
 
 /**
  * 校验 CMS 分离签名。签名产物是 DER 格式,因此固定带 -inform DER;
  * EEC 证书只作为候选签名者证书传入 -certfile,信任锚是根证书。
+ * 固定带 -md sha512:与签名侧显式指定的摘要算法对齐,不依赖默认值(理由同 signFileCms)。
  * 任何一步失败都不抛错,统一返回 { ok, reason },便于一次性汇总全部问题。
  * @param {string} filePath 被签名文件
  * @param {string} sigPath 签名文件
@@ -378,7 +383,7 @@ export function verifyFileCms(filePath, sigPath, rootCertPath, eecCertPath) {
   if (!existsSync(rootCertPath)) return { ok: false, reason: '根证书不存在:' + rootCertPath }
   if (!existsSync(eecCertPath)) return { ok: false, reason: 'EEC 证书不存在:' + eecCertPath }
   const result = run(
-    ['cms', '-verify', '-binary', '-inform', 'DER', '-in', sigPath, '-content', filePath, '-CAfile', rootCertPath, '-certfile', eecCertPath],
+    ['cms', '-verify', '-binary', '-md', 'sha512', '-inform', 'DER', '-in', sigPath, '-content', filePath, '-CAfile', rootCertPath, '-certfile', eecCertPath],
     { allowFailure: true },
   )
   if (result.ok) return { ok: true, reason: null }
@@ -390,6 +395,7 @@ export function verifyFileCms(filePath, sigPath, rootCertPath, eecCertPath) {
  * 用于本地没有根证书时的快速自检:能发现内容被篡改,但不能证明签名者是谁。
  * 签名用 -nocerts 生成,签名结构里没有签名者证书,因此必须用 -certfile 传入 EEC 证书,
  * 否则 openssl 会报 signer certificate not found;-noverify 只跳过证书链校验,不跳过证书查找。
+ * 固定带 -md sha512:与签名侧显式指定的摘要算法对齐,不依赖默认值(理由同 signFileCms)。
  * @param {string} filePath 被签名文件
  * @param {string} sigPath 签名文件
  * @param {string} eecCertPath EEC 证书
@@ -400,7 +406,7 @@ export function verifyFileCmsNoChain(filePath, sigPath, eecCertPath) {
   if (!existsSync(sigPath)) return { ok: false, reason: '签名文件不存在:' + sigPath }
   if (!existsSync(eecCertPath)) return { ok: false, reason: 'EEC 证书不存在:' + eecCertPath }
   const result = run(
-    ['cms', '-verify', '-binary', '-inform', 'DER', '-in', sigPath, '-content', filePath, '-certfile', eecCertPath, '-noverify'],
+    ['cms', '-verify', '-binary', '-md', 'sha512', '-inform', 'DER', '-in', sigPath, '-content', filePath, '-certfile', eecCertPath, '-noverify'],
     { allowFailure: true },
   )
   if (result.ok) return { ok: true, reason: null }

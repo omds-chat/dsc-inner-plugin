@@ -22,10 +22,12 @@ dsc 背书的内部插件索引: 收录从 DeepSeek-Chat-Enhanced 本体解耦�
 | 收录范围 | 从 DeepSeek-Chat-Enhanced 解耦的可选内部插件,dsc 自研 | 社区投稿的第三方插件 |
 | 信任来源 | dsc 网页 EEC 签整站 | 合集 EEC 签插件文件 |
 | 插件文件签名 | dsc 作为作者签 `plugin.js.author.sig` | 作者自签 `*.author.sig`,合集再签 CMS |
-| 版本目录文件 | `meta.json`、`plugin.js`、`plugin.js.author.sig` | `meta.json`、`plugin.js`、两份 CMS 签名、作者签名 |
-| 根目录证书 | 无,证书只出现在 `dist/` | `eec.pem` |
+| 版本目录文件 | `meta.json`、`plugin.js`、`plugin.js.author.sig`(可选) | `meta.json`、`plugin.js`、`plugin.js.sig`、`plugin.js.author.sig`(可选) |
+| 根目录证书 | 无,证书只出现在 `dist/` | 无,证书放在 `certs/<来源 id>/` |
 | 市场校验顺序 | 先验 Pages 整站签名,再验作者签名 | 先验合集 EEC 链,再验插件签名 |
 | 安装通道 | dsc-market 普通通道,软安全门禁 | 同左 |
+
+awesome 侧的版本目录只剩 `plugin.js.sig` 一份合集 CMS 签名,对 `meta.json` 的签名(`meta.json.sig`)已经取消,作者签名 `plugin.js.author.sig` 保留但可选;根目录也没有 `eec.pem`,合集证书按来源分目录放在 `certs/<来源 id>/` 下。两边的差异只在谁签插件文件,不在签名文件的数量。
 
 ## 索引文件
 
@@ -80,7 +82,7 @@ dsc 背书的内部插件索引: 收录从 DeepSeek-Chat-Enhanced 本体解耦�
       │  签发
       ▼
 dsc 网页 EEC(O=omds-chat, CN=dsc-inner-plugin;CI secrets:WEB_EEC_KEY / WEB_EEC_CERT)
-      │  openssl cms -sign -binary -outform DER
+      │  openssl cms -sign -binary -md sha512 -outform DER
       ▼
 dist/<文件>.sig
 dist/web_files.json.sig
@@ -92,10 +94,12 @@ dist/web_files.json.sig
 | 根证书 | X.509 自签名,主体 `O=omds-chat, CN=DeepSeek-Chat-Enhanced ROOT CA`,`keyUsage=critical,keyCertSign,cRLSign`,`basicConstraints=critical,CA:TRUE,pathlen:0`,有效期 3650 天 |
 | 网页 EEC 密钥 | ECDSA P-256 |
 | 网页 EEC 证书 | 由根 CA 签发,主体 `O=omds-chat, CN=dsc-inner-plugin`,`keyUsage=critical,digitalSignature`,`basicConstraints=critical,CA:FALSE`,有效期 365 天 |
-| 整站签名 | CMS 分离签名,`openssl cms -sign -binary -outform DER -nocerts -noattr`,逐文件写出 `<文件>.sig` |
+| 整站签名 | CMS 分离签名,`openssl cms -sign -binary -md sha512 -outform DER -nocerts -noattr`,逐文件写出 `<文件>.sig` |
 | 作者签名 | 裸公钥分离签名,`openssl pkeyutl -sign -rawin`,作者密钥为 Ed25519 |
 
 网页 EEC 必须用 ECDSA P-256,不能用 Ed25519: OpenSSL 的 CMS 实现对 Ed25519 私钥签名报 `provider signature failure`,实测不可用。
+
+签名与验签都显式带 `-md sha512`,不依赖 OpenSSL 的默认摘要。默认摘要随版本与发行版构建变化(OpenSSL 3.x 默认 `sha256`),一旦默认值漂移,同一份产物换个环境就验不过,而这种失败看不出原因。显式指定还能让签名与验签两侧逐字对齐,验签方不必猜签名时用了什么摘要。
 
 整站签名只签 `.html`、`.js`、`.css`、`.json` 四类文件。`eec.pem` 是证书本身,由市场直接读取;作者签名 `plugin.js.author.sig`(多签为 `.author.sig.<序号>`)不被整站签名覆盖,它有自己的验证链。
 
@@ -107,6 +111,7 @@ dsc 同时是插件作者,用 Ed25519 裸公钥给每个版本的 `plugin.js` �
 - 作者签名在产物与合集内同名,都是 `plugin.js.author.sig`,收录只做复制,不改名。
 - 同一作者可以有多个签名者,按序号配对,见下节「多签命名」。
 - 作者签名是可选项,但对本组织自研插件是默认项。插件仓库的构建要设置 `AUTHOR_SIGN_ENABLE=true` 并提供 `AUTHOR_SIGN_PRIVATE_KEY` 才会产出;收录时缺少作者签名只警告,该版本仍受整站签名覆盖。
+- 签名文件与作者公钥按序号一对一配对,两份缺一不可。只有签名文件没有对应公钥,判为该签名者无法校验(未通过);只有公钥没有签名文件,判为该版本作者签名缺失(未校验)。两种情形都不算通过,都只记警告、不阻断发布。
 - 校验按签名者逐位进行,任一失败只记警告、不阻断发布(全组织口径:签名失败只警告)。校验结果保留完整的签名者列表,市场可据此展示多个签名者。
 
 ### 多签命名

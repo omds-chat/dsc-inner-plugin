@@ -13,6 +13,9 @@
  * 第 n 位是 <文件>.author.sig.<n> 配 author_pub.<n>.pem。逐个校验,结果与签名者列表
  * 一并写进报告,便于界面展示多个签名者。
  *
+ * 配对规则:签名文件与作者公钥按序号一对一,两份缺一不可。只有签名文件没有对应公钥,
+ * 判为该签名者无法校验;只有公钥没有签名文件,判为该版本作者签名缺失。两种情形都不算通过。
+ *
  * 校验语义:索引结构与公钥材料属于发布前的强校验,出错以非零退出码结束;
  * 作者签名的校验结果一律只记警告(全组织口径:签名失败只警告,不阻断),
  * 与插件市场一侧的口径保持一致。
@@ -436,6 +439,10 @@ function collectAuthorSignatureFiles(versionDir, file) {
  * 因为整站签名仍然覆盖 plugin.js。多位签名者按序号逐个校验,任一签名失败只记警告,
  * 既不阻断同版本其他签名者的校验,也不阻断发布(全组织口径:签名失败只警告)。
  * 校验结果连同签名者列表写入 signatures,供界面展示多个签名者。
+ *
+ * 这里贯彻上面的配对规则:只有签名文件没有公钥时,该签名者记为 ok:false 并写进 signatures;
+ * 只有公钥没有签名文件时,该版本文件不写进 signatures——它没有任何签名者,不可能算通过。
+ * 两种情形都只警告,不影响退出码。
  */
 function inspectVersionAuthorSignatures({ versionDir, versionRel, report, authorContext, plugin, version, stats, signatures }) {
   const { authorRel, keys, hasUsableKey } = authorContext
@@ -461,7 +468,8 @@ function inspectVersionAuthorSignatures({ versionDir, versionRel, report, author
         const reason = key ? '作者公钥不可用' : '作者公钥缺失'
         report.warn(
           'AUTHOR_SIGN_UNVERIFIABLE',
-          signatureRel + ' 存在,但 ' + publicKeyRel + ' ' + (key ? '不可用' : '缺失') + ',第 ' + item.index + ' 个签名者无法校验',
+          signatureRel + ' 存在,但 ' + publicKeyRel + ' ' + (key ? '不可用' : '缺失') + ',第 ' + item.index
+            + ' 个签名者无法校验,判为未通过(签名文件与作者公钥两份缺一不可)',
           signatureRel,
         )
         signers.push({ index: item.index, signature: signatureRel, publicKey: publicKeyRel, ok: false, reason })
@@ -488,7 +496,7 @@ function inspectVersionAuthorSignatures({ versionDir, versionRel, report, author
       if (hasUsableKey) {
         report.warn(
           'AUTHOR_SIGN_MISSING',
-          fileRel + ' 缺少作者签名(' + file + AUTHOR_SIG_SUFFIX + '),该版本只有整站签名',
+          fileRel + ' 缺少作者签名(' + file + AUTHOR_SIG_SUFFIX + '),该版本只有整站签名,作者签名判为未校验(签名文件与作者公钥两份缺一不可)',
           versionRel,
         )
       }
