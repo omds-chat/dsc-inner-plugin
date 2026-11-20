@@ -2,7 +2,7 @@
 
 dsc 背书的内部插件索引: 收录从 DeepSeek-Chat-Enhanced 本体解耦出来的可选内部插件,整站由 dsc 签名发布。
 
-[English](README.en-US.md) | [文档索引](docs/index.md)
+[English](README.en-US.md) | [文档索引](docs/README.md)
 
 ## 定位
 

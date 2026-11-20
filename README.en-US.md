@@ -2,7 +2,7 @@
 
 The internal plugin index endorsed by dsc: it lists optional in-house plugins decoupled from the DeepSeek-Chat-Enhanced codebase, and dsc signs the whole site at publish time.
 
-[简体中文](README.md) | [Documentation index](docs/index.md)
+[简体中文](README.md) | [Documentation index](docs/README.md)
 
 ## Scope
 
