@@ -16,13 +16,13 @@
 
 作者公钥由插件构建产物 `dist/author_pub.pem` 随收录流程复制进来,不要在索引里手工生成。缺失时校验只给警告,该作者的插件便不能带作者签名。
 
-本索引的作者是 omdsc-dev 组织自身,作者目录为 `omdsc-dev`。
+本索引的作者是 omds-chat 组织自身,作者目录为 `omds-chat`。
 
 ## 插件目录
 
 `plugins/<author>/<plugin>/`
 
-- 目录名取插件 npm 包名去掉命名空间前缀:`dsc-demo` 写作 `dsc-demo`,`@omdsc-dev/dsc-demo` 同样写作 `dsc-demo`。
+- 目录名取插件 npm 包名去掉命名空间前缀:`dsc-demo` 写作 `dsc-demo`,`@omds-chat/dsc-demo` 同样写作 `dsc-demo`。
 - 插件名必须匹配 `dsc-xxx` 或 `@scope/dsc-xxx`,仅允许小写字母、数字、点、下划线、连字符。
 - 插件目录内必需 `versions.json`:
 
@@ -70,7 +70,7 @@
 
 ```text
 plugins/
-  omdsc-dev/
+  omds-chat/
     author_pub.pem
     plugin_manifest.json
     dsc-demo/

@@ -10,7 +10,7 @@ This repository is an internal plugin index, not a community collection and not 
 
 - It lists optional in-house plugins decoupled from the DeepSeek-Chat-Enhanced codebase, built and maintained by dsc. Third-party submissions are not accepted.
 - dsc signs and publishes it directly. When the market verifies this source, it first verifies the signature data of this repository's Pages site (the site-wide CMS signatures plus `dist/eec.pem`), then verifies the author signatures dsc provides as the plugin author.
-- It is functionally similar to [awesome-dsc-plugin](https://github.com/omdsc-dev/awesome-dsc-plugin) but structurally different: that repository is a community collection where an EEC signs plugin files; here dsc signs the whole site and then signs plugins as their author.
+- It is functionally similar to [awesome-dsc-plugin](https://github.com/omds-chat/awesome-dsc-plugin) but structurally different: that repository is a community collection where an EEC signs plugin files; here dsc signs the whole site and then signs plugins as their author.
 - In-house plugins are trusted by origin, but they still go through the ordinary dsc-market install channel (a soft security gate), so their artifacts must remain independently verifiable.
 - Being listed is not a certification. This repository guarantees only that distributed content matches its signatures, and does not audit plugin behaviour.
 
@@ -44,7 +44,7 @@ On an empty index `pnpm verify` and `pnpm build` pass without any certificate. S
 
 A plugin is listed only when every point below holds:
 
-- It is built and maintained by omdsc-dev, with no third-party submissions.
+- It is built and maintained by omds-chat, with no third-party submissions.
 - It is decoupled from the DeepSeek-Chat-Enhanced codebase: it can be installed and disabled on its own, without coordinated changes in that product itself.
 - It commits to never collecting or leaking user credentials and data, never issues implicit network requests, and never reads conversation content unrelated to its own purpose.
 - Its artifact is a single browser ESM script that exports `activate(context)` and depends on neither Node built-ins nor a backend API.
@@ -75,11 +75,11 @@ Both layers are needed because they answer two different questions:
 Trust starts at the root certificate and ends at the bytes of a web file.
 
 ```text
-omdsc-dev root CA (offline; root_ca.crt is distributed from the online-data branch)
+Root CA (O=omds-chat, CN=DeepSeek-Chat-Enhanced ROOT CA; offline, root_ca.crt is distributed from the online-data branch)
   root_ca.crt
       │  issues
       ▼
-dsc web EEC (CI secrets: WEB_EEC_KEY / WEB_EEC_CERT)
+dsc web EEC (O=omds-chat, CN=dsc-inner-plugin; CI secrets: WEB_EEC_KEY / WEB_EEC_CERT)
       │  openssl cms -sign -binary -outform DER
       ▼
 dist/<file>.sig
@@ -89,9 +89,9 @@ dist/web_files.json.sig
 | Item | Convention |
 |:---:|:---:|
 | Root CA key | ECDSA P-256, native OpenSSL PEM; browser WebCrypto supports P-256 most widely, the chain is verified in the browser, and Ed25519 is unavailable on the target browser floor |
-| Root certificate | X.509 self-signed, `keyUsage=critical,keyCertSign,cRLSign`, `basicConstraints=critical,CA:TRUE,pathlen:0`, valid 3650 days |
+| Root certificate | X.509 self-signed, subject `O=omds-chat, CN=DeepSeek-Chat-Enhanced ROOT CA`, `keyUsage=critical,keyCertSign,cRLSign`, `basicConstraints=critical,CA:TRUE,pathlen:0`, valid 3650 days |
 | Web EEC key | ECDSA P-256 |
-| Web EEC certificate | issued by the root CA, `keyUsage=critical,digitalSignature`, `basicConstraints=critical,CA:FALSE`, valid 365 days |
+| Web EEC certificate | issued by the root CA, subject `O=omds-chat, CN=dsc-inner-plugin`, `keyUsage=critical,digitalSignature`, `basicConstraints=critical,CA:FALSE`, valid 365 days |
 | Site-wide signature | CMS detached signature, `openssl cms -sign -binary -outform DER -nocerts -noattr`, one `<file>.sig` per file |
 | Author signature | bare-public-key detached signature, `openssl pkeyutl -sign -rawin`, Ed25519 author keys |
 
@@ -219,7 +219,7 @@ Tags must come from `tags.json`; undeclared tags are rejected by verification.
 
 This index is hosted on GitHub Pages. Pages serves static assets with `Access-Control-Allow-Origin: *` by default, so the `base_url` used in the verification steps above is readable cross-origin, and the host side cannot narrow the allowed origins to a whitelist. That is platform behaviour, not a setting of this repository.
 
-The specification requires cross-origin access limited to trusted origins, including `https://omdsc-dev.github.io` at the very least. If distribution is moved to another host, configure a CORS whitelist there that allows that origin at minimum.
+The specification requires cross-origin access limited to trusted origins, including `https://omds-chat.github.io` at the very least. If distribution is moved to another host, configure a CORS whitelist there that allows that origin at minimum.
 
 ## Local checks
 

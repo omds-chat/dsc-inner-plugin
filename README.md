@@ -10,7 +10,7 @@ dsc 背书的内部插件索引: 收录从 DeepSeek-Chat-Enhanced 本体解耦�
 
 - 收录对象是从 DeepSeek-Chat-Enhanced 本体解耦出来的可选内部插件,由 dsc 自研维护,不面向第三方投稿。
 - 由 dsc 直接签名发布。市场校验本仓库时,先校验本仓库 Pages 页面的签名数据(整站 CMS 签名与 `dist/eec.pem`),再校验 dsc 作为插件作者给出的作者签名。
-- 与 [awesome-dsc-plugin](https://github.com/omdsc-dev/awesome-dsc-plugin) 功能相似但结构不同: 那边是社区合集加 EEC 签插件;这边是 dsc 自己签整站,再由 dsc 作为作者签插件。
+- 与 [awesome-dsc-plugin](https://github.com/omds-chat/awesome-dsc-plugin) 功能相似但结构不同: 那边是社区合集加 EEC 签插件;这边是 dsc 自己签整站,再由 dsc 作为作者签插件。
 - 内部插件本身可信,但仍要走 dsc-market 的普通安装通道(软安全门禁),所以产物必须可被独立校验。
 - 收录不等于认证。本仓库只保证分发内容与签名一致,不审查插件行为。
 
@@ -44,7 +44,7 @@ dsc 背书的内部插件索引: 收录从 DeepSeek-Chat-Enhanced 本体解耦�
 
 只有同时满足以下条件的插件才会被收录:
 
-- 由 omdsc-dev 组织自研并维护,不接受第三方投稿。
+- 由 omds-chat 组织自研并维护,不接受第三方投稿。
 - 从 DeepSeek-Chat-Enhanced 本体解耦,可以单独安装、单独停用,不要求该产品本体做配套改动。
 - 承诺不采集、不外传用户凭证与数据,不隐式发起网络请求,不读取与插件功能无关的会话内容。
 - 产物是单个浏览器 ESM 脚本,导出 `activate(context)`,不依赖 Node 内置模块与后端接口。
@@ -75,11 +75,11 @@ dsc 背书的内部插件索引: 收录从 DeepSeek-Chat-Enhanced 本体解耦�
 信任从根证书开始,一路收到网页文件的字节。
 
 ```text
-omdsc-dev 根 CA(离线;root_ca.crt 由 online-data 分支分发)
+根 CA(O=omds-chat, CN=DeepSeek-Chat-Enhanced ROOT CA;离线,root_ca.crt 由 online-data 分支分发)
   root_ca.crt
       │  签发
       ▼
-dsc 网页 EEC(CI secrets:WEB_EEC_KEY / WEB_EEC_CERT)
+dsc 网页 EEC(O=omds-chat, CN=dsc-inner-plugin;CI secrets:WEB_EEC_KEY / WEB_EEC_CERT)
       │  openssl cms -sign -binary -outform DER
       ▼
 dist/<文件>.sig
@@ -89,9 +89,9 @@ dist/web_files.json.sig
 | 项 | 约定 |
 |:---:|:---:|
 | 根 CA 密钥 | ECDSA P-256,OpenSSL 原生 PEM;浏览器 WebCrypto 对 P-256 支持最广,证书链要在浏览器里校验,Ed25519 在目标浏览器下限不可用 |
-| 根证书 | X.509 自签名,`keyUsage=critical,keyCertSign,cRLSign`,`basicConstraints=critical,CA:TRUE,pathlen:0`,有效期 3650 天 |
+| 根证书 | X.509 自签名,主体 `O=omds-chat, CN=DeepSeek-Chat-Enhanced ROOT CA`,`keyUsage=critical,keyCertSign,cRLSign`,`basicConstraints=critical,CA:TRUE,pathlen:0`,有效期 3650 天 |
 | 网页 EEC 密钥 | ECDSA P-256 |
-| 网页 EEC 证书 | 由根 CA 签发,`keyUsage=critical,digitalSignature`,`basicConstraints=critical,CA:FALSE`,有效期 365 天 |
+| 网页 EEC 证书 | 由根 CA 签发,主体 `O=omds-chat, CN=dsc-inner-plugin`,`keyUsage=critical,digitalSignature`,`basicConstraints=critical,CA:FALSE`,有效期 365 天 |
 | 整站签名 | CMS 分离签名,`openssl cms -sign -binary -outform DER -nocerts -noattr`,逐文件写出 `<文件>.sig` |
 | 作者签名 | 裸公钥分离签名,`openssl pkeyutl -sign -rawin`,作者密钥为 Ed25519 |
 
@@ -219,7 +219,7 @@ dsc-inner-plugin/
 
 本索引托管在 GitHub Pages。Pages 对静态资源默认返回 `Access-Control-Allow-Origin: *`,因此上文验签步骤中的 `base_url` 天然可以被跨域读取,无法在托管侧把来源收窄到白名单。这是托管平台的既定行为,不是本仓库的配置。
 
-规范要求跨域来源仅开放信任的来源,至少包含 `https://omdsc-dev.github.io`。若把分发内容改放到其他托管,需要自行配置 CORS 白名单,至少放行该来源。
+规范要求跨域来源仅开放信任的来源,至少包含 `https://omds-chat.github.io`。若把分发内容改放到其他托管,需要自行配置 CORS 白名单,至少放行该来源。
 
 ## 本地校验
 

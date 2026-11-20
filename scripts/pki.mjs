@@ -182,8 +182,8 @@ export function resolveKeyFile(source, label = '私钥') {
  */
 export function genRootCa(dir, options = {}) {
   requireOpenssl()
-  const org = requireText(options.org || 'omdsc-dev', '组织名称')
-  const name = requireText(options.name || 'omdsc-dev Root CA', '根 CA 名称')
+  const org = requireText(options.org || 'omds-chat', '组织名称')
+  const name = requireText(options.name || 'DeepSeek-Chat-Enhanced ROOT CA', '根 CA 名称')
   const days = String(options.days || 3650)
   const keyPath = resolve(dir, options.keyFile || ROOT_CA_KEY_FILE)
   const certPath = resolve(dir, options.certFile || ROOT_CA_FILE)
@@ -224,10 +224,10 @@ export function genEecKey(dir, options = {}) {
  * @param {object} [options] keyFile、csrFile
  * @returns {{csrPath: string, keyPath: string}}
  */
-export function genCsr(dir, commonName, org = 'omdsc-dev', options = {}) {
+export function genCsr(dir, commonName, org = 'omds-chat', options = {}) {
   requireOpenssl()
   const cn = requireText(commonName, 'commonName')
-  const o = requireText(org || 'omdsc-dev', '组织名称')
+  const o = requireText(org || 'omds-chat', '组织名称')
   const keyPath = resolve(dir, options.keyFile || EEC_KEY_FILE)
   requireFile(keyPath, 'EEC 私钥')
   const csrPath = resolve(dir, options.csrFile || EEC_CSR_FILE)

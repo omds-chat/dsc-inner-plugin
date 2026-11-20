@@ -23,15 +23,15 @@
 ```json
 [
   {
-    "repo": "https://github.com/omdsc-dev/dsc-demo",
+    "repo": "https://github.com/omds-chat/dsc-demo",
     "ref": "v1.0.0",
-    "author": "omdsc-dev",
+    "author": "omds-chat",
     "plugin": "dsc-demo",
-    "profile": "https://github.com/omdsc-dev"
+    "profile": "https://github.com/omds-chat"
   },
   {
     "repo": "../dsc-demo-local",
-    "author": "omdsc-dev",
+    "author": "omds-chat",
     "plugin": "dsc-demo"
   }
 ]
