@@ -53,6 +53,7 @@ A plugin is listed only when every point below holds:
 - Its artifact is a single browser ESM script that exports `activate(context)` and depends on neither Node built-ins nor a backend API.
 - It comes with a buildable source repository, so `pnpm build` can reproduce the artifact in CI.
 - Its runtime metadata `meta.json` is complete and its plugin name matches `dsc-xxx` or `@scope/dsc-xxx`.
+- The plugin must be published to npm first, and the npm package name must equal the plugin name: `dsc-xxx` maps to the npm package `dsc-xxx`, and `@scope/dsc-xxx` maps to `@scope/dsc-xxx`. The verification `pnpm verify`, the preflight job on PRs and CI all query the npm registry; a missing package is rejected as an error, with both PR review and CI blocking it (offline, the online check downgrades to a "skip online check" warning).
 - Its maintainers answer user questions.
 
 Plugins that need a backend, need native modules, or cannot be rebuilt in CI are not accepted.

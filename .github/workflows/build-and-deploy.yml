@@ -15,6 +15,12 @@ on:
     types:
       - published
   workflow_dispatch:
+  # PR 触发只跑 preflight 预检作业(含 npm 包名强校验),构建与部署作业按事件名排除
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 # Pages 与 OIDC 令牌供发布步骤使用;本流程不再把分发内容提交回仓库,因此不需要写权限。
 permissions:
@@ -46,6 +52,8 @@ env:
 jobs:
   build:
     name: Build distribution
+    # 构建与部署只在 push main、Release 与手动触发时执行;PR 事件只跑下面的 preflight 预检作业
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     # 作者签名由插件仓库的构建产出,构建读取下面两个变量:
@@ -149,3 +157,76 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+  # PR 预检:发版前预检(npm 包名强校验在内)一次跑完,结果用固定标记写回 PR 评论。
+  # 已有评论就更新同楼,不新增楼层;预检通过也更新同楼为通过。
+  preflight:
+    name: Preflight on PR
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # 只需要读源码与写 PR 评论;不碰 Pages、不需要任何 secrets,
+    # 预检作业拿不到 EEC 与作者私钥(它们只出现在 build 作业的 secrets 里)
+    permissions:
+      contents: read
+      pull-requests: write
+    concurrency:
+      group: preflight-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      # 预检只依赖 Node 标准库,不需要 pnpm install;npm 包名检查在 CI 可联网,查不到包按错误拦截
+      - name: Run preflight
+        run: node scripts/preflight.mjs --comment preflight-comment.md
+
+      # 无论预检通过与否都更新同一条评论:github-script 直接读评论文件并调用 REST API,
+      # 按 PREFLIGHT_COMMENT_MARKER(scripts/lib/preflight-comment.mjs)查找既有评论后 PATCH,
+      # 找不到才 POST。选 github-script 而不是 gh api:评论正文是含中文与换行的 Markdown 文件,
+      # 用 gh api 需要先把正文转义进 JSON(通常借 jq),github-script 用 Node 原生读文件与发请求,
+      # 不需要额外安装与手工转义,读不到评论文件时用 core.warning 明确提示,不会误报成功。
+      - name: Upsert preflight comment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- awesome-dsc-plugin-preflight -->';
+            const file = 'preflight-comment.md';
+            if (!fs.existsSync(file)) {
+              core.warning('未找到预检评论文件 ' + file + ',跳过评论回写');
+              return;
+            }
+            const body = marker + '\n' + fs.readFileSync(file, 'utf8');
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.find((item) => item.user && item.user.type === 'Bot' && item.body && item.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+              core.info('已更新既有预检评论 ' + existing.html_url);
+            } else {
+              const { data: created } = await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+              core.info('已创建预检评论 ' + created.html_url);
+            }

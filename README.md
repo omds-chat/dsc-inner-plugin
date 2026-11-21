@@ -53,6 +53,7 @@ awesome 侧的版本目录只剩 `plugin.js.sig` 一份合集 CMS 签名,对 `me
 - 产物是单个浏览器 ESM 脚本,导出 `activate(context)`,不依赖 Node 内置模块与后端接口。
 - 提供可构建的源码仓库,`pnpm build` 能在 CI 中复核产物。
 - 运行时元数据 `meta.json` 字段完整,插件名符合 `dsc-xxx` 或 `@scope/dsc-xxx`。
+- 插件必须先发布到 npm,且 npm 包名与插件名一致:`dsc-xxx` 对应 npm 包 `dsc-xxx`,`@scope/dsc-xxx` 对应 `@scope/dsc-xxx`。收录校验 `pnpm verify`、PR 触发的 preflight 预检作业与 CI 都会查询 npm registry,包不存在以错误拦截,PR 与 CI 双重拦截(本地无网时在线检查降级为「跳过在线检查」警告)。
 - 维护者愿意回应使用者的问题。
 
 不收录需要后端服务、需要原生模块、或无法在 CI 中重建产物的插件。

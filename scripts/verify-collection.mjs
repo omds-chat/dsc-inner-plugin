@@ -9,8 +9,13 @@
  * 用法:
  *   node scripts/verify-collection.mjs --dir .
  *   node scripts/verify-collection.mjs --dir . --json
+ *
+ * 校验之外还做 npm 包名强校验:对 plugins/ 目录形态下的每个插件到 npm registry
+ * 确认登记包名(即插件名)存在;查不到按错误拦截,registry 不可达(本地无网)
+ * 降级为「跳过在线检查」警告,与社区合集 awesome-dsc-plugin 口径一致。
  */
 import { formatProblems, verifyCollection } from './lib/collection-verify.mjs'
+import { NPM_REGISTRY_URL, checkNpmPackages, collectInnerPlugins } from './lib/npm-package-check.mjs'
 import { opensslVersion } from './pki.mjs'
 
 function usage() {
@@ -19,6 +24,8 @@ function usage() {
     '',
     '选项:',
     '  --dir <目录>                合集根目录,默认当前目录',
+    '  --registry <地址>           npm registry 地址,默认 ' + NPM_REGISTRY_URL,
+    '  --skip-npm                  跳过 npm 包名在线检查',
     '  --collection-name <名称>    合集名称,默认取合集目录名',
     '  --json                      以 JSON 输出校验结果',
     '  --help                      显示本说明',
@@ -27,7 +34,7 @@ function usage() {
 }
 
 function parseArgs(argv) {
-  const options = { dir: '.', collectionName: null, json: false, help: false }
+  const options = { dir: '.', registry: NPM_REGISTRY_URL, skipNpm: false, collectionName: null, json: false, help: false }
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
     const separator = arg.indexOf('=')
@@ -42,6 +49,8 @@ function parseArgs(argv) {
     }
     switch (flag) {
       case '--dir': options.dir = take(); break
+      case '--registry': options.registry = take(); break
+      case '--skip-npm': options.skipNpm = true; break
       case '--collection-name': options.collectionName = take(); break
       case '--json': options.json = true; break
       case '--help':
@@ -52,7 +61,7 @@ function parseArgs(argv) {
   return options
 }
 
-function main() {
+async function main() {
   let options
   try {
     options = parseArgs(process.argv.slice(2))
@@ -79,6 +88,25 @@ function main() {
 
   const result = verifyCollection(options.dir, { collectionName: options.collectionName })
 
+  // npm 包名强校验:登记包名(即插件名)必须在 registry 上存在。
+  // plugins/ 目录缺失或为空时索引本来就是空的,不额外报错;registry 不可达降级为警告。
+  let npmStats
+  if (options.skipNpm) {
+    npmStats = { skipped: true }
+  } else {
+    const plugins = collectInnerPlugins(options.dir)
+    npmStats = await checkNpmPackages({
+      plugins,
+      problems: result.problems,
+      registryUrl: options.registry,
+    })
+  }
+  const npmErrors = result.problems.filter((item) => item.level === 'error').length
+  result.errorCount = npmErrors
+  result.warningCount = result.problems.length - npmErrors
+  result.ok = npmErrors === 0
+  result.npm = npmStats
+
   if (options.json) {
     process.stdout.write(JSON.stringify(result, null, 2) + '\n')
   } else {
@@ -93,12 +121,18 @@ function main() {
         '作者签名: ' + result.signatures.length + ' 个文件,' + signerTotal + ' 个签名者,未通过 ' + signerFailed + ' 个\n',
       )
     }
+    const npmSummary = npmStats.skipped === true
+      ? ',npm 包名检查跳过'
+      : ',npm 包名检查 ' + npmStats.registered + ' 个' +
+        (npmStats.offlineSkipped > 0 ? '(registry 不可达,跳过 ' + npmStats.offlineSkipped + ' 个在线查询)' : '') +
+        (npmStats.missing > 0 ? ',包不存在 ' + npmStats.missing + ' 个' : '')
     const summary =
       '合集 ' + result.collectionName + ':' +
       result.stats.authors + ' 个作者,' +
       result.stats.plugins + ' 个插件,' +
       result.stats.versions + ' 个版本,' +
-      '产物静态扫描 ' + result.stats.scannedScripts + ' 个 plugin.js,命中 ' + result.stats.networkHits + ' 处'
+      '产物静态扫描 ' + result.stats.scannedScripts + ' 个 plugin.js,命中 ' + result.stats.networkHits + ' 处' +
+      npmSummary
     if (result.ok) {
       process.stdout.write('校验通过 ' + summary + ',警告 ' + result.warningCount + ' 条\n')
     } else {
@@ -109,9 +143,12 @@ function main() {
   return result.ok ? 0 : 1
 }
 
-try {
-  process.exitCode = main()
-} catch (error) {
-  process.stderr.write('校验失败:' + (error && error.message ? error.message : String(error)) + '\n')
-  process.exitCode = 1
-}
+main().then(
+  (code) => {
+    process.exitCode = code
+  },
+  (error) => {
+    process.stderr.write('校验失败:' + (error && error.message ? error.message : String(error)) + '\n')
+    process.exitCode = 1
+  },
+)
