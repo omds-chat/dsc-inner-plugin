@@ -11,7 +11,7 @@
  * npm 校验脚本(preflight、verify-collection)的 --registry 默认值统一
  * 走 resolveNpmRegistryUrl():环境变量 NPM_REGISTRY_URL(含仓库根 .env)
  * 优先,缺省回落官方源。本地 registry 模拟器在 awesome-dsc-plugin 仓库:
- * scripts/dev/npm-registry-mock.mjs(默认端口 61123)。
+ * 组织仓库 tools/dev-local-npmjs/dev-local-npmjs.mjs(默认端口 61116)。
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
