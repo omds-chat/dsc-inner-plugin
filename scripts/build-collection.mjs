@@ -32,7 +32,7 @@ function usage() {
     '  --help                      显示本说明',
     '',
     '整站签名不在这里做,构建完成后运行:',
-    '  WEB_EEC_KEY=... node scripts/sign-site.mjs --dir dist --eec <网页 EEC 证书>',
+    '  DSC_INNER_PLUGIN_EEC_SECRET=... node scripts/sign-site.mjs --dir dist --eec <网页 EEC 证书>',
     '',
   ].join('\n'))
 }
@@ -188,7 +188,7 @@ function main() {
     process.stdout.write(formatProblems(warnings) + '\n')
   }
   process.stdout.write('分发内容已写入 ' + outDir + ',共 ' + dist.files + ' 个文件' + '\n')
-  process.stdout.write('下一步: WEB_EEC_KEY=... node scripts/sign-site.mjs --dir ' + options.out + ' --eec <网页 EEC 证书>' + '\n')
+  process.stdout.write('下一步: DSC_INNER_PLUGIN_EEC_SECRET=... node scripts/sign-site.mjs --dir ' + options.out + ' --eec <网页 EEC 证书>' + '\n')
   return 0
 }
 

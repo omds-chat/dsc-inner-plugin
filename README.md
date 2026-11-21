@@ -82,7 +82,7 @@ awesome 侧的版本目录只剩 `plugin.js.sig` 一份合集 CMS 签名,对 `me
   root_ca.crt
       │  签发
       ▼
-dsc 网页 EEC(O=omds-chat, CN=dsc-inner-plugin;CI secrets:WEB_EEC_KEY / WEB_EEC_CERT)
+dsc 网页 EEC(O=omds-chat, CN=dsc-inner-plugin;CI secrets:DSC_INNER_PLUGIN_EEC_SECRET / DSC_INNER_PLUGIN_EEC)
       │  openssl cms -sign -binary -md sha512 -outform DER
       ▼
 dist/<文件>.sig
@@ -311,14 +311,14 @@ dsc-inner-plugin/
 pnpm install
 pnpm verify                  # 只读自洽性校验,不需要证书
 pnpm build                   # 校验通过后生成 dist/
-pnpm sign -- --eec web-eec.pem   # 需要 WEB_EEC_KEY,对 dist/ 做整站签名
+pnpm sign -- --eec web-eec.pem   # 需要 DSC_INNER_PLUGIN_EEC_SECRET,对 dist/ 做整站签名
 pnpm verify:site -- --root-ca root_ca.crt   # 校验 dist/ 的整站签名
 pnpm run import              # 按来源清单收录插件
 ```
 
 - `pnpm verify` 与 `pnpm build` 不涉及任何证书,空索引也能直接通过;两者都会静态扫描每个版本的 `plugin.js`,命中 `PLUGIN_NETWORK_SELFTALK` 只记警告、不影响退出码,规则与误伤说明见[产物静态扫描](#产物静态扫描)。
 - 根目录必需文件为 `meta.json`、`plugins.json`、`tags.json`;缺任一项都以错误结束,其中缺 `tags.json` 的错误码是 `TAGS_MISSING`。
-- 整站签名需要网页 EEC 私钥。私钥用 `--key` 或环境变量 `WEB_EEC_KEY` 指定,证书用 `--eec` 或 `WEB_EEC_CERT` 指定,两者都可以是 PEM 文本或文件路径。
+- 整站签名需要网页 EEC 私钥。私钥用 `--key` 或环境变量 `DSC_INNER_PLUGIN_EEC_SECRET` 指定,证书用 `--eec` 或 `DSC_INNER_PLUGIN_EEC` 指定,两者都可以是 PEM 文本或文件路径。
 - 缺少私钥或证书时 `sign-site.mjs` 只警告并保留未签名 `dist/`,方便本地调试;CI 传 `--require-key`,把这种缺失当错误。
 - `verify-site.mjs` 给出 `--root-ca` 时做完整证书链校验,不给时只做签名完整性校验。
 - 收录请用 `pnpm run import`。`pnpm import` 是 pnpm 自带命令,不是本仓库的收录脚本。
@@ -330,8 +330,8 @@ pnpm run import              # 按来源清单收录插件
 
 - 签名不通过时插件市场会警告用户并建议重新下载,不会静默运行。
 - 收录不等于认证。签名只证明分发内容与签名者一致,不代表插件行为经过审查。
-- 私钥只放 CI secrets 与本地环境变量,不要提交。网页 EEC 私钥放在 `WEB_EEC_KEY`;作者私钥放在插件仓库侧的 `AUTHOR_SIGN_PRIVATE_KEY`,本仓库只透传给插件构建,收录、校验与整站签名都不使用它;根证书私钥永远不进本仓库,也不进 CI。`.gitignore` 已排除 `.env`。
-- 更换网页 EEC 密钥对必须同时更新 `WEB_EEC_KEY` 与 `WEB_EEC_CERT`,并由组织在 dsce 仓库的 `certs` 分支同步 `eec.pem`(本仓库不存放该证书);旧证书签出的 CMS 签名将无法再验证。
+- 私钥只放 CI secrets 与本地环境变量,不要提交。网页 EEC 私钥放在 `DSC_INNER_PLUGIN_EEC_SECRET`;作者私钥放在插件仓库侧的 `AUTHOR_SIGN_PRIVATE_KEY`,本仓库只透传给插件构建,收录、校验与整站签名都不使用它;根证书私钥永远不进本仓库,也不进 CI。`.gitignore` 已排除 `.env`。
+- 更换网页 EEC 密钥对必须同时更新 `DSC_INNER_PLUGIN_EEC_SECRET` 与 `DSC_INNER_PLUGIN_EEC`,并由组织在 dsce 仓库的 `certs` 分支同步 `eec.pem`(本仓库不存放该证书);旧证书签出的 CMS 签名将无法再验证。
 - 签名覆盖文件字节。换行、缩进或空白的任何改动都会让校验失败,仓库统一使用 LF,作者产物也必须是 LF。
 - 插件产物建议行压缩,既减小体积,也避免无意义的空白差异。
 

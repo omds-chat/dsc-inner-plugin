@@ -13,14 +13,14 @@
  * 签名是对文件原始字节的 CMS 分离签名,固定 -binary -md sha512 -outform DER,与 dsce 的 sign-web 同一套机制。
  * -md sha512 与验签侧显式对齐:摘要算法不依赖 OpenSSL 的默认值,避免默认摘要随版本漂移后旧签名验不过。
  *
- * 私钥只从环境变量 WEB_EEC_KEY 或 --key 读取,证书从 --eec 或环境变量 WEB_EEC_CERT 读取,
+ * 私钥只从环境变量 DSC_INNER_PLUGIN_EEC_SECRET 或 --key 读取,证书从 --eec 或环境变量 DSC_INNER_PLUGIN_EEC 读取,
  * 两者都可以是 PEM 文本或文件路径。缺私钥或证书时不产出任何签名,只在日志里警告并返回 0,
  * 方便本地调试;CI 用 --require-key 把这种缺失当作错误。
  *
  * 用法:
- *   WEB_EEC_KEY=... node scripts/sign-site.mjs --dir dist --eec web-eec.pem
+ *   DSC_INNER_PLUGIN_EEC_SECRET=... node scripts/sign-site.mjs --dir dist --eec web-eec.pem
  *   node scripts/sign-site.mjs --dir dist --eec web-eec.pem --key web-eec-secret.pem
- *   WEB_EEC_KEY=... WEB_EEC_CERT=... node scripts/sign-site.mjs --dir dist --require-key
+ *   DSC_INNER_PLUGIN_EEC_SECRET=... DSC_INNER_PLUGIN_EEC=... node scripts/sign-site.mjs --dir dist --require-key
  */
 import { copyFileSync, existsSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { extname, join, resolve } from 'node:path'
@@ -54,8 +54,8 @@ function usage() {
     '  --help             显示本说明',
     '',
     '环境变量:',
-    '  WEB_EEC_KEY        网页 EEC 私钥,等价于 --key',
-    '  WEB_EEC_CERT       网页 EEC 证书,等价于 --eec',
+    '  DSC_INNER_PLUGIN_EEC_SECRET        网页 EEC 私钥,等价于 --key',
+    '  DSC_INNER_PLUGIN_EEC       网页 EEC 证书,等价于 --eec',
     '',
     '签名覆盖 ' + SITE_SIGNED_EXTENSIONS.join('/') + ' 文件,清单写 ' + WEB_MANIFEST_FILE + ',清单自身单独签名。',
     '',
@@ -135,16 +135,16 @@ function main() {
     return fail('待签名目录不存在或不是目录:' + dir)
   }
 
-  const keySource = String(options.key || process.env.WEB_EEC_KEY || '').trim()
+  const keySource = String(options.key || process.env.DSC_INNER_PLUGIN_EEC_SECRET || '').trim()
   const certSource = String(
     options.eec ||
-    process.env.WEB_EEC_CERT ||
+    process.env.DSC_INNER_PLUGIN_EEC ||
     (existsSync(join(dir, EEC_CERT_FILE)) ? join(dir, EEC_CERT_FILE) : ''),
   ).trim()
 
   const missing = []
-  if (keySource === '') missing.push('私钥(WEB_EEC_KEY 或 --key)')
-  if (certSource === '') missing.push('证书(WEB_EEC_CERT 或 --eec)')
+  if (keySource === '') missing.push('私钥(DSC_INNER_PLUGIN_EEC_SECRET 或 --key)')
+  if (certSource === '') missing.push('证书(DSC_INNER_PLUGIN_EEC 或 --eec)')
   if (missing.length > 0) {
     const message = '缺少' + missing.join('与') + ',未对 ' + dir + ' 做整站签名'
     if (options.requireKey) return fail(message)

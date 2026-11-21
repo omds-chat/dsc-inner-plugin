@@ -82,7 +82,7 @@ Root CA (O=omds-chat, CN=DeepSeek-Chat-Enhanced ROOT CA; offline, root_ca.crt is
   root_ca.crt
       │  issues
       ▼
-dsc web EEC (O=omds-chat, CN=dsc-inner-plugin; CI secrets: WEB_EEC_KEY / WEB_EEC_CERT)
+dsc web EEC (O=omds-chat, CN=dsc-inner-plugin; CI secrets: DSC_INNER_PLUGIN_EEC_SECRET / DSC_INNER_PLUGIN_EEC)
       │  openssl cms -sign -binary -md sha512 -outform DER
       ▼
 dist/<file>.sig
@@ -311,14 +311,14 @@ The specification requires cross-origin access limited to trusted origins, inclu
 pnpm install
 pnpm verify                  # read-only consistency check, no certificate needed
 pnpm build                   # writes dist/ once verification passes
-pnpm sign -- --eec web-eec.pem   # needs WEB_EEC_KEY, signs dist/ as a whole site
+pnpm sign -- --eec web-eec.pem   # needs DSC_INNER_PLUGIN_EEC_SECRET, signs dist/ as a whole site
 pnpm verify:site -- --root-ca root_ca.crt   # verifies the site-wide signatures in dist/
 pnpm run import              # import plugins from the source manifest
 ```
 
 - `pnpm verify` and `pnpm build` involve no certificate and pass on an empty index. Both run the static scan of every version's `plugin.js` and only warn on `PLUGIN_NETWORK_SELFTALK`, without changing the exit code; rules and false positives are in [static scan of plugin artifacts](#static-scan-of-plugin-artifacts).
 - The required root files are `meta.json`, `plugins.json` and `tags.json`; a missing one ends with an error, and the code for a missing `tags.json` is `TAGS_MISSING`.
-- Site-wide signing needs the web EEC private key. The key comes from `--key` or the `WEB_EEC_KEY` environment variable; the certificate comes from `--eec` or `WEB_EEC_CERT`. Both accept PEM text or a file path.
+- Site-wide signing needs the web EEC private key. The key comes from `--key` or the `DSC_INNER_PLUGIN_EEC_SECRET` environment variable; the certificate comes from `--eec` or `DSC_INNER_PLUGIN_EEC`. Both accept PEM text or a file path.
 - When the key or the certificate is missing, `sign-site.mjs` only warns and keeps an unsigned `dist/`, which suits local debugging. CI passes `--require-key` and treats the same condition as an error.
 - `verify-site.mjs` verifies the full certificate chain when `--root-ca` is given, and only checks signature integrity otherwise.
 - Use `pnpm run import`. `pnpm import` is a built-in pnpm command, not this repository's import script.
@@ -330,8 +330,8 @@ pnpm run import              # import plugins from the source manifest
 
 - When a signature fails, the market warns the user and suggests downloading again. It does not run the plugin silently.
 - Being listed is not a certification. A signature proves the content matches its signer, not that the plugin behaviour was audited.
-- Keep private keys in CI secrets and local environment variables, never in the repository. The web EEC key lives in `WEB_EEC_KEY`; the author key lives in `AUTHOR_SIGN_PRIVATE_KEY` on the plugin repository side and this repository only forwards it to the plugin build, never using it for import, verification or site-wide signing; the root private key never enters this repository and never enters CI. `.gitignore` already excludes `.env`.
-- Rotating the web EEC key pair means updating both `WEB_EEC_KEY` and `WEB_EEC_CERT` and having the organization sync `eec.pem` on the `certs` branch of the dsce repository (this repository does not hold that certificate); CMS signatures made with the old certificate can no longer be verified.
+- Keep private keys in CI secrets and local environment variables, never in the repository. The web EEC key lives in `DSC_INNER_PLUGIN_EEC_SECRET`; the author key lives in `AUTHOR_SIGN_PRIVATE_KEY` on the plugin repository side and this repository only forwards it to the plugin build, never using it for import, verification or site-wide signing; the root private key never enters this repository and never enters CI. `.gitignore` already excludes `.env`.
+- Rotating the web EEC key pair means updating both `DSC_INNER_PLUGIN_EEC_SECRET` and `DSC_INNER_PLUGIN_EEC` and having the organization sync `eec.pem` on the `certs` branch of the dsce repository (this repository does not hold that certificate); CMS signatures made with the old certificate can no longer be verified.
 - Signatures cover file bytes. Any change to line endings, indentation or whitespace breaks verification, and the repository uses LF everywhere. Author artifacts must be LF too.
 - Minify plugin artifacts. It reduces size and removes meaningless whitespace differences.
 

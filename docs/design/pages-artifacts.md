@@ -79,7 +79,7 @@
 | `dist/<文件>.sig`(每个 `.html`、`.js`、`.css`、`.json`) | 签名阶段逐文件生成([sign-site.mjs:205](../../scripts/sign-site.mjs)) | 签名自检([verify-site.mjs:159](../../scripts/verify-site.mjs));市场按清单逐个校验 | 它就是整站签名本身,但不签自己 | 单份固定,与源文件大小无关;总份数等于被签名文件数 |
 | `dist/web_files.json` | 签名阶段写出([sign-site.mjs:210](../../scripts/sign-site.mjs)),内容为 `{ schemaVersion, files }` | 签名自检([verify-site.mjs:142](../../scripts/verify-site.mjs));市场先验清单再验逐文件签名 | 不在自己的 `files` 内;单独签一份 `.sig` | 与被签名文件数线性: 每份一行路径 |
 | `dist/web_files.json.sig` | 签名阶段对清单单独签名([sign-site.mjs:212](../../scripts/sign-site.mjs)) | 签名自检([verify-site.mjs:145](../../scripts/verify-site.mjs));市场 | 它就是清单的签名,不签自己 | 固定 |
-| `dist/eec.pem` | 签名阶段从 `--eec` 或 `WEB_EEC_CERT` 复制([sign-site.mjs:214](../../scripts/sign-site.mjs));证书本身由离线环节签发,本仓库不产证书 | 市场(取证书、验到根证书);签名自检的证书链入口([verify-site.mjs:119](../../scripts/verify-site.mjs)) | 不参与(`.pem`,信任材料不进清单) | 固定: 单张证书 |
+| `dist/eec.pem` | 签名阶段从 `--eec` 或 `DSC_INNER_PLUGIN_EEC` 复制([sign-site.mjs:214](../../scripts/sign-site.mjs));证书本身由离线环节签发,本仓库不产证书 | 市场(取证书、验到根证书);签名自检的证书链入口([verify-site.mjs:119](../../scripts/verify-site.mjs)) | 不参与(`.pem`,信任材料不进清单) | 固定: 单张证书 |
 
 清单与逐文件签名是同一件事的两半,顺序不能换:
 

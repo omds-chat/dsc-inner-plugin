@@ -39,8 +39,8 @@ concurrency:
 #   secrets.AUTHOR_OMDS_CHAT_SECRET 作者私钥(Ed25519),只透传给插件构建产出作者签名。
 # 根证书私钥属于离线签名环境,绝不出现在本流程。
 env:
-  WEB_EEC_KEY: ${{ secrets.DSC_INNER_PLUGIN_EEC_SECRET }}
-  WEB_EEC_CERT: ${{ secrets.DSC_INNER_PLUGIN_EEC }}
+  DSC_INNER_PLUGIN_EEC_SECRET: ${{ secrets.DSC_INNER_PLUGIN_EEC_SECRET }}
+  DSC_INNER_PLUGIN_EEC: ${{ secrets.DSC_INNER_PLUGIN_EEC }}
   ROOT_CA_PEM: ${{ secrets.DS_CHAT_ROOT_CA }}
 
 jobs:
@@ -103,16 +103,16 @@ jobs:
       - name: Sign site
         run: |
           set -euo pipefail
-          if [ -z "${WEB_EEC_KEY:-}" ]; then
+          if [ -z "${DSC_INNER_PLUGIN_EEC_SECRET:-}" ]; then
             echo "::error::缺少 secrets.DSC_INNER_PLUGIN_EEC_SECRET,无法对 dist/ 做整站签名"
             exit 1
           fi
-          if [ -z "${WEB_EEC_CERT:-}" ]; then
+          if [ -z "${DSC_INNER_PLUGIN_EEC:-}" ]; then
             echo "::error::缺少 secrets.DSC_INNER_PLUGIN_EEC,需要网页 EEC 证书 PEM 文本"
             exit 1
           fi
           cert="$RUNNER_TEMP/web-eec.pem"
-          printf '%s\n' "$WEB_EEC_CERT" > "$cert"
+          printf '%s\n' "$DSC_INNER_PLUGIN_EEC" > "$cert"
           node scripts/sign-site.mjs --dir dist --eec "$cert" --require-key
 
       # 发布前自检: 清单签名、逐文件签名、清单覆盖率与孤儿签名。
