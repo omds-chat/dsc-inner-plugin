@@ -80,9 +80,9 @@
 
 ### 产物静态扫描
 
-每个版本的 `plugin.js` 都要过产物静态扫描: 插件不得自建网络通道,产物里不得出现 `fetch(`、`XMLHttpRequest(`、`WebSocket(`、`EventSource(`、`navigator.sendBeacon(` 与远程地址的 `import(`。命中报 `PLUGIN_NETWORK_SELFTALK` 错误,收录跳过该插件(不写出版本目录),`pnpm verify` 与 `pnpm build` 直接失败。
+每个版本的 `plugin.js` 都要过产物静态扫描: 插件不得自建网络通道,产物里不得出现 `fetch(`、`XMLHttpRequest(`、`WebSocket(`、`EventSource(`、`navigator.sendBeacon(` 与远程地址的 `import(`。命中报 `PLUGIN_NETWORK_SELFTALK` 警告: 收录照常写出该版本目录,`pnpm verify` 与 `pnpm build` 照常通过,退出码仍为 0。
 
-扫描只认全局对象上的直接调用,规则、误伤与盲区见根目录 [README](../README.md#产物静态扫描)。它与作者签名不是一回事: 扫描命中是契约问题,阻断;作者签名结论只警告。
+扫描只认全局对象上的直接调用,规则、误伤与盲区见根目录 [README](../README.md#产物静态扫描)。它与作者签名同一口径: 两者都只警告、不阻断,是否收录由维护者复核判断。
 
 `meta.json` 的必填字段:
 
@@ -107,7 +107,7 @@
 | 目录 | CI 收录脚本 `scripts/import-plugins.mjs` | `plugins/<author>/<plugin>/<x.y.z>/` 与 `versions.json` | 目录名与版本号取自产物 `meta.json`,不手工建 |
 | 清单 | 组织维护者声明来源,CI 写入清单 | `.github/plugins-sources.json`、`plugins/author_manifest.json`、`plugins/<author>/plugin_manifest.json`、`plugins.json` | 来源清单是唯一人工入口;新条目 `tag` 留空,事后从根目录 `tags.json` 补 |
 | 签名 | 作者签名由插件仓库构建产出,整站签名由 CI 产出 | 版本目录的 `plugin.js.author.sig`(多签 `.author.sig.<n>`)、`plugins/<author>/author_pub.pem`、`author_pub.<n>.pem` 与 `dist/<文件>.sig`、`web_files.json`、`eec.pem` | 本仓库不生成任何签名,只接收产物并在 `dist/` 上签整站 |
-| 校验 | CI 与插件市场 | 只读 | CI 跑 `pnpm verify`、`pnpm build`、`pnpm verify:site`;其中 `pnpm verify` 与 `pnpm build` 会静态扫描 `plugin.js`,命中 `PLUGIN_NETWORK_SELFTALK` 即阻断;市场按根目录 README 的顺序复核 |
+| 校验 | CI 与插件市场 | 只读 | CI 跑 `pnpm verify`、`pnpm build`、`pnpm verify:site`;其中 `pnpm verify` 与 `pnpm build` 会静态扫描 `plugin.js`,命中 `PLUGIN_NETWORK_SELFTALK` 只警告、不阻断;市场按根目录 README 的顺序复核 |
 
 签名与校验的分工再强调一次:
 

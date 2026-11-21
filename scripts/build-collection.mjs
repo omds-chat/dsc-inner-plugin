@@ -181,7 +181,7 @@ function main() {
     result.stats.authors + ' 个作者,' +
     result.stats.plugins + ' 个插件,' +
     result.stats.versions + ' 个版本' + signerNote +
-    ',产物静态扫描 ' + result.stats.scannedScripts + ' 个 plugin.js' + '\n',
+    ',产物静态扫描 ' + result.stats.scannedScripts + ' 个 plugin.js(命中 ' + result.stats.networkHits + ' 处,仅警告)' + '\n',
   )
   if (warnings.length > 0) {
     process.stdout.write('警告 ' + warnings.length + ' 条:' + '\n')

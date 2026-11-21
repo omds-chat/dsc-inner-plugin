@@ -78,7 +78,7 @@ jobs:
       # 按 .github/plugins-sources.json 收录插件;清单为空时脚本直接返回 0。
       # 收录只复制作者侧分离签名 plugin.js.author.sig(多签 .2/.3)与作者公钥 author_pub.pem(多签 .2.pem/.3.pem),
       # 不生成任何合集签名;产物没带作者签名时只警告,该版本仍有整站签名。
-      # 搬产物前先对 dist/plugin.js 做产物静态扫描: 命中 PLUGIN_NETWORK_SELFTALK 即跳过该项,不写出任何版本目录。
+      # 搬产物前先对 dist/plugin.js 做产物静态扫描: 命中 PLUGIN_NETWORK_SELFTALK 只记警告,收录照常继续。
       - name: Import plugins
         run: |
           set -euo pipefail
@@ -89,7 +89,7 @@ jobs:
 
       # 自洽性校验: 索引数据、作者公钥、作者签名与版本目录结构。
       # 作者签名逐位签名者校验,失败只记警告、不阻断(全组织口径);索引结构错误才失败。
-      # 同时静态扫描每个版本的 plugin.js: 插件不得自建网络通道,命中 PLUGIN_NETWORK_SELFTALK 即失败。
+      # 同时静态扫描每个版本的 plugin.js: 插件不得自建网络通道,命中 PLUGIN_NETWORK_SELFTALK 只记警告,不阻断。
       # 这一步不涉及证书链: 插件文件不再由合集 EEC 签名,整站签名在下面的步骤里做。
       - name: Verify collection
         run: pnpm verify

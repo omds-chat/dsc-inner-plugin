@@ -20,9 +20,9 @@
  * 作者签名的校验结果一律只记警告(全组织口径:签名失败只警告,不阻断),
  * 与插件市场一侧的口径保持一致。
  *
- * 每个版本的 plugin.js 还要过一道产物静态扫描:插件不得自建网络通道,命中即错误
- * (PLUGIN_NETWORK_SELFTALK,见 plugin-network-scan.mjs)。这是契约条款的机检,不是签名结论,
- * 所以按结构错误的强度处理,而不是像作者签名那样只警告。
+ * 每个版本的 plugin.js 还要过一道产物静态扫描:插件不得自建网络通道,命中报
+ * PLUGIN_NETWORK_SELFTALK (见 plugin-network-scan.mjs)。与作者签名一样只记警告、不阻断发布,
+ * 全组织口径一致:命中是「需要人工复核」的信号,不是结构错误。
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
@@ -433,8 +433,8 @@ function inspectVersionMeta({ versionDir, versionRel, version, pluginName, repor
 /**
  * 产物静态扫描:插件脚本不得自建网络通道。
  *
- * 只读 plugin.js 的文本,不执行插件、不联网。命中即错误:契约条款被违反是可机检的硬条件,
- * 与作者签名「只警告」的口径不同。逐条给出命中的字面量与行列位置,超出上限的只汇总计数,
+ * 只读 plugin.js 的文本,不执行插件、不联网。命中只记警告、不阻断:与作者签名同一口径,
+ * 也与社区合集一致,是否继续由维护者判断。逐条给出命中的字面量与行列位置,超出上限的只汇总计数,
  * 避免一个坏脚本把报告刷满。
  */
 function inspectVersionNetworkSurface({ versionDir, versionRel, report, stats }) {
@@ -454,17 +454,17 @@ function inspectVersionNetworkSurface({ versionDir, versionRel, report, stats })
   stats.networkHits += result.hitCount
   if (result.ok) return
   for (const hit of result.hits) {
-    report.error(
+    report.warn(
       NETWORK_SELFTALK_CODE,
       rel + ' 第 ' + hit.line + ' 行第 ' + hit.column + ' 列出现 ' + hit.literal
-        + ',插件产物不得自行发起网络通道,该脚本不予收录',
+        + ',插件产物不得自行发起网络通道,仅警告,不阻断收录与发布',
       rel,
     )
   }
   if (result.truncated) {
-    report.error(
+    report.warn(
       NETWORK_SELFTALK_CODE,
-      rel + ' 另有 ' + (result.hitCount - result.hits.length) + ' 处命中未逐条列出(单文件上限 ' + result.hits.length + ' 条),共 ' + result.hitCount + ' 处',
+      rel + ' 另有 ' + (result.hitCount - result.hits.length) + ' 处命中未逐条列出(单文件上限 ' + result.hits.length + ' 条),共 ' + result.hitCount + ' 处,仅警告',
       rel,
     )
   }

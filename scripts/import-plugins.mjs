@@ -14,8 +14,8 @@
  * 整站签名由 sign-site.mjs 在 dist/ 上生成,收录阶段不做签名。
  *
  * 产物侧另有一道静态扫描:dist/plugin.js 不得出现自行发起网络的写法,命中
- * PLUGIN_NETWORK_SELFTALK 即跳过该插件,不写出任何版本目录。它与 pnpm verify 侧的扫描
- * 共用同一个扫描器,口径一致。
+ * PLUGIN_NETWORK_SELFTALK 只记警告,收录照常继续。它与 pnpm verify 侧的扫描
+ * 共用同一个扫描器,口径一致:命中是提示,不是一票否决。
  *
  * 用法:
  *   node scripts/import-plugins.mjs
@@ -245,17 +245,17 @@ function readDist(distDir) {
   }
   const jsPath = join(distDir, 'plugin.js')
   if (!existsSync(jsPath)) throw new Error('构建产物缺少 dist/plugin.js')
-  assertNoNetworkSelfTalk(jsPath)
+  warnNetworkSelfTalk(jsPath)
   return { meta, metaPath, jsPath, distDir }
 }
 
 /**
- * 收录侧门禁:插件脚本不得自建网络通道。
+ * 收录侧扫描:插件脚本不得自建网络通道。
  *
- * 拦在搬产物之前:命中就按单项失败处理(跳过该插件并回滚),不写出半套版本目录。
- * 与 verify 侧共用同一个扫描器与错误码,两侧结论不会互相矛盾。
+ * 命中只记警告,收录照常进行:与 pnpm verify 侧共用同一个扫描器与错误码,
+ * 两侧结论不会互相矛盾,也都不会因为命中而阻断。
  */
-function assertNoNetworkSelfTalk(jsPath) {
+function warnNetworkSelfTalk(jsPath) {
   let source
   try {
     source = readFileSync(jsPath, 'utf8')
@@ -266,9 +266,9 @@ function assertNoNetworkSelfTalk(jsPath) {
   if (result.ok) return
   const detail = result.hits.map((hit) => describeNetworkHit(hit)).join('、')
   const more = result.truncated ? ' 等 ' + result.hitCount + ' 处' : ''
-  throw new Error(
+  logWarning(
     NETWORK_SELFTALK_CODE + ' dist/plugin.js 出现自行发起网络通道的写法: ' + detail + more
-      + ';插件产物不得自建网络通道,该插件不予收录',
+      + ';插件产物不得自建网络通道,仅警告,收录继续进行',
   )
 }
 

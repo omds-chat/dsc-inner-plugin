@@ -11,7 +11,7 @@
 | [plugins/README.md](../plugins/README.md) | 插件目录与版本目录的结构规范 | 作者目录、插件目录、版本目录的字段与命名,作者多签命名,版本 `meta.json` 必填字段 | 新增作者、插件或版本目录,核对目录结构与清单字段时 | 维护者、贡献者、Agent |
 | [plugins/omds-chat/dsc-humanize/README.md](../plugins/omds-chat/dsc-humanize/README.md) | 待收录插件的目录占位说明 | 该目录当前不放什么、正式收录后补齐的结构、为何暂不写 `plugins.json` 条目 | 核对 dsc-humanize 的收录占位,或正式收录前确认目录契约时 | 维护者、Agent |
 | [.github/plugins-sources.README.md](../.github/plugins-sources.README.md) | 收录来源清单的字段与执行说明 | 清单字段、示例、收录时发生的动作与收录之后的产物 | 提交或修改来源清单,或排查某次收录为何跳过时 | 维护者、Agent |
-| [docs/design/collection-and-author-signing.md](design/collection-and-author-signing.md) | 收录管线与两层签名的设计说明 | 阶段划分与失败语义、作者签名与整站签名的分工、产物静态扫描为何是硬门禁、与社区合集的信任模型差异、未定稿事项 | 判断某个失败该阻断还是警告,或改动签名与校验边界时 | 维护者、Agent |
+| [docs/design/collection-and-author-signing.md](design/collection-and-author-signing.md) | 收录管线与两层签名的设计说明 | 阶段划分与失败语义、作者签名与整站签名的分工、产物静态扫描为何只警告、与社区合集的信任模型差异、未定稿事项 | 判断某个失败该阻断还是警告,或改动签名与校验边界时 | 维护者、Agent |
 | [docs/design/pages-artifacts.md](design/pages-artifacts.md) | `dist/` 发布产物的职责划分 | 每份产物的生成者、读取者、是否进入整站签名、体积随什么增长 | 改动构建或签名脚本,或核对发布内容是否齐全时 | 维护者、Agent |
 | [docs/README.md](README.md) | 本仓库文档的索引入口 | 主表、冲突优先级、文档分层、维护约定 | 查找文档,或新增、删除、改写文档时 | 用户、贡献者、维护者、Agent |
 

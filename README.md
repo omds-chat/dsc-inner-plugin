@@ -49,7 +49,7 @@ awesome 侧的版本目录只剩 `plugin.js.sig` 一份合集 CMS 签名,对 `me
 
 - 由 omds-chat 组织自研并维护,不接受第三方投稿。
 - 从 DeepSeek-Chat-Enhanced 本体解耦,可以单独安装、单独停用,不要求该产品本体做配套改动。
-- 承诺不采集、不外传用户凭证与数据,不自行发起任何网络请求,不读取与插件功能无关的会话内容。这条由[产物静态扫描](#产物静态扫描)机检:命中即拒绝收录。
+- 承诺不采集、不外传用户凭证与数据,不自行发起任何网络请求,不读取与插件功能无关的会话内容。这条由[产物静态扫描](#产物静态扫描)机检:命中只记警告、不阻断收录。
 - 产物是单个浏览器 ESM 脚本,导出 `activate(context)`,不依赖 Node 内置模块与后端接口。
 - 提供可构建的源码仓库,`pnpm build` 能在 CI 中复核产物。
 - 运行时元数据 `meta.json` 字段完整,插件名符合 `dsc-xxx` 或 `@scope/dsc-xxx`。
@@ -159,7 +159,7 @@ dsc 同时是插件作者,用 Ed25519 裸公钥给每个版本的 `plugin.js` �
 
 ## 产物静态扫描
 
-收录与发布前会静态扫描每个版本的 `plugin.js`,拦下自行发起网络的写法。这是「插件不得自建网络通道」这条契约的机检部分: 门禁在收录与发布侧,不在运行侧,装好之后的运行行为不由本仓库负责。
+收录与发布前会静态扫描每个版本的 `plugin.js`,列出自行发起网络的写法。这是「插件不得自建网络通道」这条契约的机检部分: 检查落在收录与发布侧,不在运行侧,命中只警告、不阻断,装好之后的运行行为不由本仓库负责。
 
 | 规则 | 命中的写法 | 发起的是什么 |
 |:---:|:---:|:---:|
@@ -173,15 +173,15 @@ dsc 同时是插件作者,用 Ed25519 裸公钥给每个版本的 `plugin.js` �
 判定与输出:
 
 - 命中报错误码 `PLUGIN_NETWORK_SELFTALK`,消息给出命中的字面量与「第 N 行第 M 列」,`problems[].path` 指向该 `plugin.js`。
-- `pnpm verify` 与 `pnpm build` 都以非零退出码结束,后者在写出 `dist/` 之前中止;`pnpm run import` 跳过该插件,不写出任何版本目录。
-- 这是错误而不是警告。违反契约是可机检的硬条件;作者签名是对既有事实的软结论,两者不同,软安全门禁那套「失败只警告」不适用于这里。
+- 命中只记警告: `pnpm verify` 与 `pnpm build` 照常通过,后者照常写出 `dist/`;`pnpm run import` 照常收录该插件。`pnpm verify --json` 里这条问题的 `level` 是 `warning`。
+- 这是警告而不是阻断,与作者签名的结论同一口径: 扫描只读文本、不做语法分析,误伤面无法压到零,因此把判断留给维护者。警告不等于合规,命中项仍应在收录前复核并改写。
 
 误伤与规避:
 
 - 只认全局对象上的直接调用: `fetch(` 前面不是点号,或者点号前面是 `window`、`globalThis`、`self`、`global`。`client.fetch(...)`、`this.fetch(...)`、`params.fetch(...)` 都不命中。
 - 只有标识符后面跟着左括号才算调用;单纯取引用不命中,例如 `const f = fetch`。
 - 扫描不做语法分析,注释、字符串与模板字面量里的同形文字照样命中。已知误伤有两类: 对象字面量里定义同名方法(`fetch(path) { ... }`)与文案里写到这个词。规避方式是改名(例如方法叫 `request`)或改写那段文字,不要为了绕开扫描去拆散写法。
-- 已知盲区: 间接写法拦不住,例如先 `const f = fetch` 再调用、`globalThis['fetch']`、可选链 `window?.fetch(`、换名的 XHR 包装。扫描是收录门禁,不是沙箱;契约靠同一份代码评审兜住,不要用变体写法绕过。
+- 已知盲区: 间接写法拦不住,例如先 `const f = fetch` 再调用、`globalThis['fetch']`、可选链 `window?.fetch(`、换名的 XHR 包装。扫描是收录侧的提示,不是沙箱;契约靠同一份代码评审兜住,不要用变体写法绕过。
 - 只扫 `plugin.js`;作者签名文件与 `meta.json` 不含可执行代码,不扫。
 
 规则表与实现同在 [scripts/lib/plugin-network-scan.mjs](scripts/lib/plugin-network-scan.mjs),扫描不联网、不读证书: `pnpm verify --json` 的 `problems[].code` 取值为 `PLUGIN_NETWORK_SELFTALK`。
@@ -249,7 +249,7 @@ dsc-inner-plugin/
 ## 收录流程
 
 1. 由组织维护者提交 PR 修改 `.github/plugins-sources.json`,每个插件一项,写明 `repo`、可选的 `ref`、`author` 与 `plugin`。字段与收录规则见 [.github/plugins-sources.README.md](.github/plugins-sources.README.md)。
-2. 合并后 CI 依次执行: 克隆或复制源码到 `temp/import/`、`pnpm install --frozen-lockfile`、`pnpm build`、把 `dist/meta.json` 与 `dist/plugin.js` 写入 `plugins/<author>/<plugin>/<version>/`、把 `dist/plugin.js.author.sig`(多签 `.author.sig.<序号>`)原样复制到版本目录、把 `dist/author_pub.pem` 与 `author_pub.<序号>.pem` 复制为 `plugins/<author>/` 下的同名文件,再更新该插件的 `versions.json`、该作者的 `plugin_manifest.json` 与根目录 `plugins.json`。产物 `dist/plugin.js` 在搬进版本目录之前先过静态扫描: 命中 `PLUGIN_NETWORK_SELFTALK` 即跳过该插件,不写出任何版本目录。
+2. 合并后 CI 依次执行: 克隆或复制源码到 `temp/import/`、`pnpm install --frozen-lockfile`、`pnpm build`、把 `dist/meta.json` 与 `dist/plugin.js` 写入 `plugins/<author>/<plugin>/<version>/`、把 `dist/plugin.js.author.sig`(多签 `.author.sig.<序号>`)原样复制到版本目录、把 `dist/author_pub.pem` 与 `author_pub.<序号>.pem` 复制为 `plugins/<author>/` 下的同名文件,再更新该插件的 `versions.json`、该作者的 `plugin_manifest.json` 与根目录 `plugins.json`。产物 `dist/plugin.js` 在搬进版本目录之前先过静态扫描: 命中 `PLUGIN_NETWORK_SELFTALK` 只记警告,收录照常继续。
 3. 人工补充标签。新条目在 `plugins.json` 里的 `tag` 初始为空数组,需要从 `tags.json` 的预设标签中挑选后提交。未在 `tags.json` 中声明的标签会被校验拒绝;`tags.json` 缺失同样判为错误,发布中止。
 4. 构建与发布。CI 依次执行 `pnpm verify`(自洽性校验与产物静态扫描,不涉及证书链)、`pnpm build`(生成 `dist/`)、`scripts/sign-site.mjs`(用 `secrets.WEB_EEC_KEY` 做整站签名)、`scripts/verify-site.mjs`(签名自检),最后把 `dist/` 发布到 Pages。
 
@@ -316,14 +316,14 @@ pnpm verify:site -- --root-ca root_ca.crt   # 校验 dist/ 的整站签名
 pnpm run import              # 按来源清单收录插件
 ```
 
-- `pnpm verify` 与 `pnpm build` 不涉及任何证书,空索引也能直接通过;两者都会静态扫描每个版本的 `plugin.js`,命中 `PLUGIN_NETWORK_SELFTALK` 即失败,规则与误伤说明见[产物静态扫描](#产物静态扫描)。
+- `pnpm verify` 与 `pnpm build` 不涉及任何证书,空索引也能直接通过;两者都会静态扫描每个版本的 `plugin.js`,命中 `PLUGIN_NETWORK_SELFTALK` 只记警告、不影响退出码,规则与误伤说明见[产物静态扫描](#产物静态扫描)。
 - 根目录必需文件为 `meta.json`、`plugins.json`、`tags.json`;缺任一项都以错误结束,其中缺 `tags.json` 的错误码是 `TAGS_MISSING`。
 - 整站签名需要网页 EEC 私钥。私钥用 `--key` 或环境变量 `WEB_EEC_KEY` 指定,证书用 `--eec` 或 `WEB_EEC_CERT` 指定,两者都可以是 PEM 文本或文件路径。
 - 缺少私钥或证书时 `sign-site.mjs` 只警告并保留未签名 `dist/`,方便本地调试;CI 传 `--require-key`,把这种缺失当错误。
 - `verify-site.mjs` 给出 `--root-ca` 时做完整证书链校验,不给时只做签名完整性校验。
 - 收录请用 `pnpm run import`。`pnpm import` 是 pnpm 自带命令,不是本仓库的收录脚本。
 - 要产出作者签名,收录环境需设置 `AUTHOR_SIGN_ENABLE=true` 与 `AUTHOR_SIGN_PRIVATE_KEY`,收录脚本只把这两个变量透传给插件构建、不读取私钥内容;开启但没有私钥时如实降级为不签名并警告,收录照常继续。
-- 作者签名失败只记警告,不让 `pnpm verify` 或 `pnpm build` 失败;索引结构、公钥材料或产物静态扫描出错才会阻断。
+- 作者签名失败与产物静态扫描命中都只记警告,不让 `pnpm verify` 或 `pnpm build` 失败;只有索引结构与公钥材料出错才阻断。
 - 本机需要 OpenSSL 3.0 及以上,脚本只调用 `openssl` 命令行,不实现任何密码学运算。
 
 ## 安全提示
