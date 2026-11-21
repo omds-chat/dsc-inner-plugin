@@ -16,6 +16,7 @@
  */
 import { formatProblems, verifyCollection } from './lib/collection-verify.mjs'
 import { NPM_REGISTRY_URL, checkNpmPackages, collectInnerPlugins } from './lib/npm-package-check.mjs'
+import { resolveNpmRegistryUrl } from './lib/env.mjs'
 import { opensslVersion } from './pki.mjs'
 
 function usage() {
@@ -24,17 +25,20 @@ function usage() {
     '',
     '选项:',
     '  --dir <目录>                合集根目录,默认当前目录',
-    '  --registry <地址>           npm registry 地址,默认 ' + NPM_REGISTRY_URL,
+    '  --registry <地址>           npm registry 地址,默认读环境变量 NPM_REGISTRY_URL(缺省 ' + NPM_REGISTRY_URL + ')',
     '  --skip-npm                  跳过 npm 包名在线检查',
     '  --collection-name <名称>    合集名称,默认取合集目录名',
     '  --json                      以 JSON 输出校验结果',
     '  --help                      显示本说明',
     '',
+    '环境变量:',
+    '  NPM_REGISTRY_URL            npm registry 地址,等价于 --registry;本地模拟器见 awesome-dsc-plugin 的 scripts/dev/npm-registry-mock.mjs',
+    '',
   ].join('\n'))
 }
 
 function parseArgs(argv) {
-  const options = { dir: '.', registry: NPM_REGISTRY_URL, skipNpm: false, collectionName: null, json: false, help: false }
+  const options = { dir: '.', registry: resolveNpmRegistryUrl(), skipNpm: false, collectionName: null, json: false, help: false }
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
     const separator = arg.indexOf('=')

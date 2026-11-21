@@ -18,7 +18,7 @@
  *
  * 选项:
  *   --dir <目录>       合集根目录,默认当前目录
- *   --registry <地址>  npm registry 地址
+ *   --registry <地址>  npm registry 地址,默认读环境变量 NPM_REGISTRY_URL(缺省官方源)
  *   --skip-npm         跳过 npm 包名在线检查
  *   --comment <路径>   同时把报告写成 PR 评论 Markdown(工作流用)
  *   --json             以 JSON 输出汇总
@@ -28,6 +28,7 @@ import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { verifyCollection } from './lib/collection-verify.mjs'
 import { NPM_REGISTRY_URL, checkNpmPackages, collectInnerPlugins } from './lib/npm-package-check.mjs'
+import { resolveNpmRegistryUrl } from './lib/env.mjs'
 import { NETWORK_SELFTALK_CODE as PLUGIN_NETWORK_SELFTALK } from './lib/plugin-network-scan.mjs'
 import { formatPreflightComment, PREFLIGHT_COMMENT_MARKER } from './lib/preflight-comment.mjs'
 
@@ -37,17 +38,20 @@ function usage() {
     '',
     '选项:',
     '  --dir <目录>       合集根目录,默认当前目录',
-    '  --registry <地址>  npm registry 地址,默认 ' + NPM_REGISTRY_URL,
+    '  --registry <地址>  npm registry 地址,默认读环境变量 NPM_REGISTRY_URL(缺省 ' + NPM_REGISTRY_URL + ')',
     '  --skip-npm         跳过 npm 包名在线检查',
     '  --comment <路径>   同时把报告写成 PR 评论 Markdown,固定标记见 lib/preflight-comment.mjs',
     '  --json             以 JSON 输出汇总',
     '  --help             显示本说明',
     '',
+    '环境变量:',
+    '  NPM_REGISTRY_URL   npm registry 地址,等价于 --registry;本地模拟器见 awesome-dsc-plugin 的 scripts/dev/npm-registry-mock.mjs',
+    '',
   ].join('\n'))
 }
 
 function parseArgs(argv) {
-  const options = { dir: '.', registry: NPM_REGISTRY_URL, skipNpm: false, comment: null, json: false, help: false }
+  const options = { dir: '.', registry: resolveNpmRegistryUrl(), skipNpm: false, comment: null, json: false, help: false }
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
     const separator = arg.indexOf('=')
