@@ -324,7 +324,7 @@ pnpm run import              # 按来源清单收录插件
 - 收录请用 `pnpm run import`。`pnpm import` 是 pnpm 自带命令,不是本仓库的收录脚本。
 - 要产出作者签名,收录环境需设置 `AUTHOR_SIGN_ENABLE=true` 与 `AUTHOR_SIGN_PRIVATE_KEY`,收录脚本只把这两个变量透传给插件构建、不读取私钥内容;开启但没有私钥时如实降级为不签名并警告,收录照常继续。
 - 作者签名失败与产物静态扫描命中都只记警告,不让 `pnpm verify` 或 `pnpm build` 失败;只有索引结构与公钥材料出错才阻断。
-- 本机需要 OpenSSL 3.0 及以上,脚本只调用 `openssl` 命令行,不实现任何密码学运算。
+- 本地需要 OpenSSL 3.0 及以上,脚本只调用 `openssl` 命令行,不实现任何密码学运算。
 
 ## 安全提示
 
