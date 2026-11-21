@@ -251,7 +251,7 @@ dsc-inner-plugin/
 1. 由组织维护者提交 PR 修改 `.github/plugins-sources.json`,每个插件一项,写明 `repo`、可选的 `ref`、`author` 与 `plugin`。字段与收录规则见 [.github/plugins-sources.README.md](.github/plugins-sources.README.md)。
 2. 合并后 CI 依次执行: 克隆或复制源码到 `temp/import/`、`pnpm install --frozen-lockfile`、`pnpm build`、把 `dist/meta.json` 与 `dist/plugin.js` 写入 `plugins/<author>/<plugin>/<version>/`、把 `dist/plugin.js.author.sig`(多签 `.author.sig.<序号>`)原样复制到版本目录、把 `dist/author_pub.pem` 与 `author_pub.<序号>.pem` 复制为 `plugins/<author>/` 下的同名文件,再更新该插件的 `versions.json`、该作者的 `plugin_manifest.json` 与根目录 `plugins.json`。产物 `dist/plugin.js` 在搬进版本目录之前先过静态扫描: 命中 `PLUGIN_NETWORK_SELFTALK` 只记警告,收录照常继续。
 3. 人工补充标签。新条目在 `plugins.json` 里的 `tag` 初始为空数组,需要从 `tags.json` 的预设标签中挑选后提交。未在 `tags.json` 中声明的标签会被校验拒绝;`tags.json` 缺失同样判为错误,发布中止。
-4. 构建与发布。CI 依次执行 `pnpm verify`(自洽性校验与产物静态扫描,不涉及证书链)、`pnpm build`(生成 `dist/`)、`scripts/sign-site.mjs`(用 `secrets.WEB_EEC_KEY` 做整站签名)、`scripts/verify-site.mjs`(签名自检),最后把 `dist/` 发布到 Pages。
+4. 构建与发布。CI 依次执行 `pnpm verify`(自洽性校验与产物静态扫描,不涉及证书链)、`pnpm build`(生成 `dist/`)、`scripts/sign-site.mjs`(用 `secrets.DSC_INNER_PLUGIN_EEC_SECRET` 做整站签名)、`scripts/verify-site.mjs`(签名自检),最后把 `dist/` 发布到 Pages。
 
 收录环节任何一步失败只跳过该插件并在日志里写明原因,其余插件照常处理。校验、构建与签名环节失败则整个构建中止。
 
@@ -263,7 +263,7 @@ dsc-inner-plugin/
 |:---:|:---:|:---:|:---:|
 | 目录 | CI 收录脚本 | `plugins/<author>/<plugin>/<x.y.z>/` 与 `versions.json` | `node scripts/import-plugins.mjs --manifest .github/plugins-sources.json` |
 | 清单 | 组织维护者声明来源,CI 写入清单 | `.github/plugins-sources.json`、`plugins/author_manifest.json`、`plugins/<author>/plugin_manifest.json`、`plugins.json` | 维护者 PR 后由同一次收录写入;标签人工补 |
-| 签名 | 作者签名由插件仓库构建完成,整站签名由 CI 完成 | 版本目录的 `plugin.js.author.sig`(多签 `.author.sig.<序号>`)与 `plugins/<author>/author_pub.pem`、`author_pub.<序号>.pem`;`dist/<文件>.sig`、`web_files.json`、`eec.pem` | 收录时复制产物签名;签名步骤用 `secrets.WEB_EEC_KEY` 与 `secrets.WEB_EEC_CERT` 执行 `scripts/sign-site.mjs` |
+| 签名 | 作者签名由插件仓库构建完成,整站签名由 CI 完成 | 版本目录的 `plugin.js.author.sig`(多签 `.author.sig.<序号>`)与 `plugins/<author>/author_pub.pem`、`author_pub.<序号>.pem`;`dist/<文件>.sig`、`web_files.json`、`eec.pem` | 收录时复制产物签名;签名步骤用 `secrets.DSC_INNER_PLUGIN_EEC_SECRET` 与 `secrets.DSC_INNER_PLUGIN_EEC` 执行 `scripts/sign-site.mjs` |
 | 校验 | CI 与插件市场 | 只读 | CI 依次跑 `pnpm verify`、`pnpm build`、`pnpm verify:site`;市场按「市场如何校验本来源」复核 |
 
 具体到一次 PR:

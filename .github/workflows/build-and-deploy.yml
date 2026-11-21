@@ -33,15 +33,15 @@ concurrency:
 #      多位签名者依次为 plugin.js.author.sig.<序号>,配 plugins/<作者>/author_pub.<序号>.pem。
 #
 # 私钥只来自 secrets:
-#   secrets.WEB_EEC_KEY            网页 EEC 私钥(ECDSA P-256),只在本流程内存中出现;
-#   secrets.WEB_EEC_CERT           网页 EEC 证书 PEM 文本,公开材料,随 dist/eec.pem 分发;
-#   secrets.ROOT_CA_PEM            根证书 PEM 文本,可选,用于签名后自检证书链;
-#   secrets.AUTHOR_SIGN_PRIVATE_KEY 作者私钥(Ed25519),只透传给插件构建产出作者签名。
+#   secrets.DSC_INNER_PLUGIN_EEC_SECRET            网页 EEC 私钥(ECDSA P-256),只在本流程内存中出现;
+#   secrets.DSC_INNER_PLUGIN_EEC           网页 EEC 证书 PEM 文本,公开材料,随 dist/eec.pem 分发;
+#   secrets.DS_CHAT_ROOT_CA            根证书 PEM 文本,可选,用于签名后自检证书链;
+#   secrets.AUTHOR_OMDS_CHAT_SECRET 作者私钥(Ed25519),只透传给插件构建产出作者签名。
 # 根证书私钥属于离线签名环境,绝不出现在本流程。
 env:
-  WEB_EEC_KEY: ${{ secrets.WEB_EEC_KEY }}
-  WEB_EEC_CERT: ${{ secrets.WEB_EEC_CERT }}
-  ROOT_CA_PEM: ${{ secrets.ROOT_CA_PEM }}
+  WEB_EEC_KEY: ${{ secrets.DSC_INNER_PLUGIN_EEC_SECRET }}
+  WEB_EEC_CERT: ${{ secrets.DSC_INNER_PLUGIN_EEC }}
+  ROOT_CA_PEM: ${{ secrets.DS_CHAT_ROOT_CA }}
 
 jobs:
   build:
@@ -52,8 +52,8 @@ jobs:
     #   AUTHOR_SIGN_ENABLE= true 时才会签名,其他取值视为关闭;
     #   AUTHOR_SIGN_PRIVATE_KEY 未配置时把开关降为 false,如实降级为不签名并给出警告,不让构建失败。
     env:
-      AUTHOR_SIGN_ENABLE: "${{ secrets.AUTHOR_SIGN_PRIVATE_KEY != '' && 'true' || 'false' }}"
-      AUTHOR_SIGN_PRIVATE_KEY: "${{ secrets.AUTHOR_SIGN_PRIVATE_KEY }}"
+      AUTHOR_SIGN_ENABLE: "${{ secrets.AUTHOR_OMDS_CHAT_SECRET != '' && 'true' || 'false' }}"
+      AUTHOR_SIGN_PRIVATE_KEY: "${{ secrets.AUTHOR_OMDS_CHAT_SECRET }}"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -83,7 +83,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${AUTHOR_SIGN_PRIVATE_KEY:-}" ]; then
-            echo "::warning::secrets.AUTHOR_SIGN_PRIVATE_KEY 未配置,插件构建不产出作者签名,本次收录只有整站签名"
+            echo "::warning::secrets.AUTHOR_OMDS_CHAT_SECRET 未配置,插件构建不产出作者签名,本次收录只有整站签名"
           fi
           node scripts/import-plugins.mjs --manifest .github/plugins-sources.json
 
@@ -104,11 +104,11 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${WEB_EEC_KEY:-}" ]; then
-            echo "::error::缺少 secrets.WEB_EEC_KEY,无法对 dist/ 做整站签名"
+            echo "::error::缺少 secrets.DSC_INNER_PLUGIN_EEC_SECRET,无法对 dist/ 做整站签名"
             exit 1
           fi
           if [ -z "${WEB_EEC_CERT:-}" ]; then
-            echo "::error::缺少 secrets.WEB_EEC_CERT,需要网页 EEC 证书 PEM 文本"
+            echo "::error::缺少 secrets.DSC_INNER_PLUGIN_EEC,需要网页 EEC 证书 PEM 文本"
             exit 1
           fi
           cert="$RUNNER_TEMP/web-eec.pem"
@@ -125,7 +125,7 @@ jobs:
             printf '%s\n' "$ROOT_CA_PEM" > "$root"
             node scripts/verify-site.mjs --dir dist --root-ca "$root"
           else
-            echo "::warning::未设置 secrets.ROOT_CA_PEM,只做签名完整性校验,未验证证书链"
+            echo "::warning::未设置 secrets.DS_CHAT_ROOT_CA,只做签名完整性校验,未验证证书链"
             node scripts/verify-site.mjs --dir dist
           fi
 

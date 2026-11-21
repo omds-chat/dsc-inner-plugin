@@ -112,7 +112,7 @@
 签名与校验的分工再强调一次:
 
 - 作者签名:由插件仓库的构建完成。dsc 作为作者用 Ed25519 私钥只签 `plugin.js`,产物是 `dist/plugin.js.author.sig` 与 `dist/author_pub.pem`(多签再加 `.author.sig.<n>` 与 `author_pub.<n>.pem`);收录脚本把同名文件原样复制进版本目录与作者目录,不重新签名、不改名。
-- 整站签名:由本仓库 CI 的 `scripts/sign-site.mjs` 完成,需要 `secrets.WEB_EEC_KEY` 与 `secrets.WEB_EEC_CERT`,覆盖 `dist/` 内全部 `.html`、`.js`、`.css`、`.json`。签名只落在 `dist/`,`plugins/` 源码目录不出现整站签名文件。
+- 整站签名:由本仓库 CI 的 `scripts/sign-site.mjs` 完成,需要 `secrets.DSC_INNER_PLUGIN_EEC_SECRET` 与 `secrets.DSC_INNER_PLUGIN_EEC`,覆盖 `dist/` 内全部 `.html`、`.js`、`.css`、`.json`。签名只落在 `dist/`,`plugins/` 源码目录不出现整站签名文件。
 - 校验:索引结构与公钥材料的错误在 CI 侧阻断发布,标签不在根目录 `tags.json` 词表内同样阻断;作者签名的校验结果一律只记警告,逐位签名者给出结论,不阻断发布,与插件市场侧口径一致。
 
 当前状态:作者目录 `plugins/omds-chat/` 与作者清单已按本规范建好,`plugin_manifest.json` 登记 `dsc-humanize`;`plugins.json` 仍为空,因为条目要求完整版本目录,产物未就位时写入会直接让校验失败。
