@@ -6,14 +6,14 @@
 
 | 文档 | 职责一句话 | 主要内容 | 什么时候需要读 | 主要读者（Agent、用户、贡献者、维护者） |
 |:---:|:---:|:---:|:---:|:---:|
-| [README.md](../README.md) | 面向使用者的中文总览 | 定位、收录条件、两层签名与信任、索引文件、标签与错误码、目录结构、本地命令 | 第一次接触本索引,或需要运行校验、构建与签名命令时 | 用户、贡献者 |
+| [README.md](../README.md) | 面向使用者的中文总览 | 定位、收录条件、两层签名与信任、索引文件、标签与错误码、产物静态扫描、目录结构、本地命令 | 第一次接触本索引,或需要运行校验、构建与签名命令时 | 用户、贡献者 |
 | [README.en-US.md](../README.en-US.md) | 中文总览的英文版本 | 与中文 README 对应的英文说明 | 读者不使用中文,或需要引用英文口径时 | 用户、贡献者 |
 | [plugins/README.md](../plugins/README.md) | 插件目录与版本目录的结构规范 | 作者目录、插件目录、版本目录的字段与命名,作者多签命名,版本 `meta.json` 必填字段 | 新增作者、插件或版本目录,核对目录结构与清单字段时 | 维护者、贡献者、Agent |
 | [plugins/omds-chat/dsc-humanize/README.md](../plugins/omds-chat/dsc-humanize/README.md) | 待收录插件的目录占位说明 | 该目录当前不放什么、正式收录后补齐的结构、为何暂不写 `plugins.json` 条目 | 核对 dsc-humanize 的收录占位,或正式收录前确认目录契约时 | 维护者、Agent |
 | [.github/plugins-sources.README.md](../.github/plugins-sources.README.md) | 收录来源清单的字段与执行说明 | 清单字段、示例、收录时发生的动作与收录之后的产物 | 提交或修改来源清单,或排查某次收录为何跳过时 | 维护者、Agent |
-| [docs/design/collection-and-author-signing.md](design/collection-and-author-signing.md) | 收录管线与两层签名的设计说明 | 阶段划分与失败语义、作者签名与整站签名的分工、与社区合集的信任模型差异、未定稿事项 | 判断某个失败该阻断还是警告,或改动签名与校验边界时 | 维护者、Agent |
+| [docs/design/collection-and-author-signing.md](design/collection-and-author-signing.md) | 收录管线与两层签名的设计说明 | 阶段划分与失败语义、作者签名与整站签名的分工、产物静态扫描为何是硬门禁、与社区合集的信任模型差异、未定稿事项 | 判断某个失败该阻断还是警告,或改动签名与校验边界时 | 维护者、Agent |
 | [docs/design/pages-artifacts.md](design/pages-artifacts.md) | `dist/` 发布产物的职责划分 | 每份产物的生成者、读取者、是否进入整站签名、体积随什么增长 | 改动构建或签名脚本,或核对发布内容是否齐全时 | 维护者、Agent |
-| [docs/README.md](index.md) | 本仓库文档的索引入口 | 主表、冲突优先级、文档分层、维护约定 | 查找文档,或新增、删除、改写文档时 | 用户、贡献者、维护者、Agent |
+| [docs/README.md](README.md) | 本仓库文档的索引入口 | 主表、冲突优先级、文档分层、维护约定 | 查找文档,或新增、删除、改写文档时 | 用户、贡献者、维护者、Agent |
 
 索引范围是当前分支的源码文档。`dist/` 下是构建副本,`single-branch/` 下是其他分支的工作树,两者都不列入本索引;插件目录内的占位说明随正式收录删除时,按维护约定同步移除对应行。
 
@@ -36,7 +36,7 @@
 | 分层 | 文档 | 面向 | 写作边界 |
 |:---:|:---:|:---:|:---:|
 | 对外文档 | [README.md](../README.md)、[README.en-US.md](../README.en-US.md) | 使用者、插件市场读者与外部贡献者 | 说明定位、收录条件、标签规则、签名概览与命令入口;不展开实现细节与设计取舍 |
-| 维护者文档 | [plugins/README.md](../plugins/README.md)、[收录与作者签名](design/collection-and-author-signing.md)、[发布产物说明](design/pages-artifacts.md)、[docs/README.md](index.md) | 组织维护者、接手者 | 写结构规范、失败语义、信任边界与理由;机制变更时与脚本同轮更新 |
+| 维护者文档 | [plugins/README.md](../plugins/README.md)、[收录与作者签名](design/collection-and-author-signing.md)、[发布产物说明](design/pages-artifacts.md)、[docs/README.md](README.md) | 组织维护者、接手者 | 写结构规范、失败语义、信任边界与理由;机制变更时与脚本同轮更新 |
 | Agent 执行文档 | [.github/plugins-sources.README.md](../.github/plugins-sources.README.md),以及各脚本顶部的用法注释与 `--help` 输出 | 执行收录、校验、构建与签名的 Agent | 只写可执行动作、输入输出与判据;不重复设计理由,判断依据仍回到第 1、2 层 |
 
 ## 四、维护约定
@@ -46,7 +46,7 @@
 
 | 变更内容 | 当轮要同步的文档 |
 |:---:|:---:|
-| 校验规则、错误码或错误级别 | [README.md](../README.md) 的标签与错误码说明、[收录与作者签名](design/collection-and-author-signing.md)第六节 |
+| 校验规则、错误码或错误级别 | [README.md](../README.md) 的标签与错误码说明、[产物静态扫描](../README.md#产物静态扫描)一节、[收录与作者签名](design/collection-and-author-signing.md)第六节 |
 | 目录、版本或清单字段 | [plugins/README.md](../plugins/README.md) 与 [来源清单说明](../.github/plugins-sources.README.md) |
 | 构建产物集合或签名覆盖 | [发布产物说明](design/pages-artifacts.md)、[README.md](../README.md) 的索引与构建说明 |
 | 收录步骤或 CI 阶段顺序 | [来源清单说明](../.github/plugins-sources.README.md)、[README.md](../README.md) 的收录流程、[构建与发布流程](../.github/workflows/build-and-deploy.yml) |
