@@ -43,7 +43,7 @@
 
 1. 把 `repo` 克隆或复制到 `temp/import/`。
 2. 在该目录执行 `pnpm install --frozen-lockfile` 与 `pnpm build`。
-3. 读取 `dist/meta.json` 取得版本号,把 `dist/meta.json`、`dist/plugin.js` 复制到 `plugins/<author>/<plugin>/<version>/`。
+3. 读取 `dist/meta.json` 取得版本号,先对 `dist/plugin.js` 做产物静态扫描,再把 `dist/meta.json`、`dist/plugin.js` 复制到 `plugins/<author>/<plugin>/<version>/`。扫描命中 `PLUGIN_NETWORK_SELFTALK` 时跳过该插件,不写出任何版本目录;规则见根目录 [README](../README.md#产物静态扫描)。
 4. 若 `dist/` 内存在作者签名 `plugin.js.author.sig`,原样复制到版本目录同名文件;多位签名者依次为 `plugin.js.author.sig.<序号>`(序号从 2 起),同样原样复制。
 5. 若 `dist/` 内存在 `author_pub.pem` 或 `author_pub.<序号>.pem`,复制为 `plugins/<author>` 下的同名文件;序号与签名文件配对。
 6. 旧产物里遗留的 `dist/meta.json.author.sig` 只提示、不复制:作者签名只覆盖 `plugin.js`,对 `meta.json` 的作者签名已取消。

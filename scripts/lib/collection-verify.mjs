@@ -19,6 +19,10 @@
  * 校验语义:索引结构与公钥材料属于发布前的强校验,出错以非零退出码结束;
  * 作者签名的校验结果一律只记警告(全组织口径:签名失败只警告,不阻断),
  * 与插件市场一侧的口径保持一致。
+ *
+ * 每个版本的 plugin.js 还要过一道产物静态扫描:插件不得自建网络通道,命中即错误
+ * (PLUGIN_NETWORK_SELFTALK,见 plugin-network-scan.mjs)。这是契约条款的机检,不是签名结论,
+ * 所以按结构错误的强度处理,而不是像作者签名那样只警告。
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
@@ -32,6 +36,7 @@ import {
   describePublicKey,
   verifyFileAuthor,
 } from '../pki.mjs'
+import { NETWORK_SELFTALK_CODE, scanNetworkSelfTalk } from './plugin-network-scan.mjs'
 
 /** 合集根目录必需的文件。tags.json 是标签词表,缺词表等于不校验标签,不能当作可选文件 */
 export const ROOT_REQUIRED_FILES = ['meta.json', 'plugins.json', 'tags.json']
@@ -95,7 +100,7 @@ function parseJsonFile(path, label, report) {
 export function verifyCollection(collectionDir, options = {}) {
   const root = resolve(collectionDir)
   const problems = []
-  const stats = { authors: 0, plugins: 0, versions: 0, authorSignatures: 0 }
+  const stats = { authors: 0, plugins: 0, versions: 0, authorSignatures: 0, scannedScripts: 0, networkHits: 0 }
   /**
    * 每个版本文件的作者签名记录,保留全部签名者,便于后续界面展示多个签名者:
    * { plugin, version, file, ok, signers: [{ index, signature, publicKey, ok, reason }] }
@@ -394,6 +399,7 @@ function inspectPlugin({ authorContext, entry, report, stats, signatures }) {
       }
     }
     inspectVersionMeta({ versionDir, versionRel, version, pluginName: entry.plugin_name, report })
+    inspectVersionNetworkSurface({ versionDir, versionRel, report, stats })
     inspectVersionAuthorSignatures({
       versionDir,
       versionRel,
@@ -421,6 +427,46 @@ function inspectVersionMeta({ versionDir, versionRel, version, pluginName, repor
   }
   if (meta.version !== version) {
     report.error('PLUGIN_META_MISMATCH', versionRel + '/meta.json 的 version 为 ' + JSON.stringify(meta.version) + ',与目录名 ' + version + ' 不一致', versionRel + '/meta.json')
+  }
+}
+
+/**
+ * 产物静态扫描:插件脚本不得自建网络通道。
+ *
+ * 只读 plugin.js 的文本,不执行插件、不联网。命中即错误:契约条款被违反是可机检的硬条件,
+ * 与作者签名「只警告」的口径不同。逐条给出命中的字面量与行列位置,超出上限的只汇总计数,
+ * 避免一个坏脚本把报告刷满。
+ */
+function inspectVersionNetworkSurface({ versionDir, versionRel, report, stats }) {
+  const file = 'plugin.js'
+  const path = join(versionDir, file)
+  if (!isFile(path)) return
+  const rel = versionRel + '/' + file
+  let source
+  try {
+    source = readText(path)
+  } catch (error) {
+    report.error('FILE_UNREADABLE', rel + ' 无法读取:' + error.message, rel)
+    return
+  }
+  stats.scannedScripts += 1
+  const result = scanNetworkSelfTalk(source, { maxHits: 8 })
+  stats.networkHits += result.hitCount
+  if (result.ok) return
+  for (const hit of result.hits) {
+    report.error(
+      NETWORK_SELFTALK_CODE,
+      rel + ' 第 ' + hit.line + ' 行第 ' + hit.column + ' 列出现 ' + hit.literal
+        + ',插件产物不得自行发起网络通道,该脚本不予收录',
+      rel,
+    )
+  }
+  if (result.truncated) {
+    report.error(
+      NETWORK_SELFTALK_CODE,
+      rel + ' 另有 ' + (result.hitCount - result.hits.length) + ' 处命中未逐条列出(单文件上限 ' + result.hits.length + ' 条),共 ' + result.hitCount + ' 处',
+      rel,
+    )
   }
 }
 

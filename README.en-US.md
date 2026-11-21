@@ -49,7 +49,7 @@ A plugin is listed only when every point below holds:
 
 - It is built and maintained by omds-chat, with no third-party submissions.
 - It is decoupled from the DeepSeek-Chat-Enhanced codebase: it can be installed and disabled on its own, without coordinated changes in that product itself.
-- It commits to never collecting or leaking user credentials and data, never issues implicit network requests, and never reads conversation content unrelated to its own purpose.
+- It commits to never collecting or leaking user credentials and data, never opens a network channel of its own, and never reads conversation content unrelated to its own purpose. This one is machine-checked by the [static scan of plugin artifacts](#static-scan-of-plugin-artifacts): a hit rejects the plugin.
 - Its artifact is a single browser ESM script that exports `activate(context)` and depends on neither Node built-ins nor a backend API.
 - It comes with a buildable source repository, so `pnpm build` can reproduce the artifact in CI.
 - Its runtime metadata `meta.json` is complete and its plugin name matches `dsc-xxx` or `@scope/dsc-xxx`.
@@ -157,6 +157,35 @@ In-house plugins are trusted by origin: they are built by dsc and decoupled from
 
 The cost of this design is explicit: a tampered plugin may still be installed after the user accepts the warning. The benefit is equally explicit: verification does not depend on the market hard-coding trust in one source, so mirrors, alternative hosts and offline installs all use the same verification logic.
 
+## Static scan of plugin artifacts
+
+Before import and before the build, every version's `plugin.js` is scanned for code that opens a network channel of its own. This is the machine-checked part of the contract "a plugin must not build its own network channel": the gate sits on import and publication, not on the runtime, and behaviour after installation is outside this repository's responsibility.
+
+| Rule | Matching form | What it opens |
+|:---:|:---:|:---:|
+| global `fetch` | `fetch(`, `window.fetch(`, `globalThis.fetch(`, `self.fetch(` | HTTP request |
+| `XMLHttpRequest` | `XMLHttpRequest(` | HTTP request, legacy form |
+| `WebSocket` | `WebSocket(` | long-lived connection |
+| `EventSource` | `EventSource(` | server-sent events |
+| `navigator.sendBeacon` | `navigator.sendBeacon(` | reporting when the page unloads |
+| remote dynamic import | `import('https://...')`, `import('//...')` | code fetched from another origin |
+
+Verdict and output:
+
+- A hit reports the error code `PLUGIN_NETWORK_SELFTALK` together with the matched literal and its "line N, column M"; `problems[].path` points at that `plugin.js`.
+- `pnpm verify` and `pnpm build` exit non-zero, and the build stops before writing `dist/`; `pnpm run import` skips that plugin and writes no version directory.
+- This is an error, not a warning. Breaking the contract is a machine-checkable hard condition, while an author signature is a soft verdict about a fact that already happened. The "failures only warn" rule of the soft security gate does not apply here.
+
+False positives and how to avoid them:
+
+- Only direct calls on the global object match: `fetch(` matches when the character before it is not a dot, or when that dot is preceded by `window`, `globalThis`, `self` or `global`. `client.fetch(...)`, `this.fetch(...)` and `params.fetch(...)` do not match.
+- The identifier must be followed by an opening parenthesis; a bare reference such as `const f = fetch` does not match.
+- The scan is not a parser, so the same text inside comments, strings and template literals matches too. Two false positives are known: a same-named method defined in an object literal (`fetch(path) { ... }`) and prose that writes the word. Rename the method (for example to `request`) or reword the sentence instead of splitting the text to dodge the scan.
+- Known blind spots: indirect forms are not caught, such as `const f = fetch` followed by a call, `globalThis['fetch']`, optional chaining `window?.fetch(` and renamed XHR wrappers. The scan is an import gate, not a sandbox; the contract also rests on code review, and variant spellings are not a way around it.
+- Only `plugin.js` is scanned; author signature files and `meta.json` hold no executable code.
+
+The rule table and the implementation live in [scripts/lib/plugin-network-scan.mjs](scripts/lib/plugin-network-scan.mjs). The scan needs neither network nor certificate, and `problems[].code` in `pnpm verify --json` is `PLUGIN_NETWORK_SELFTALK`.
+
 ## Directory layout
 
 The source repository holds index data and author material only; it holds no certificate.
@@ -193,6 +222,7 @@ dsc-inner-plugin/
 └── scripts/
     ├── pki.mjs                         OpenSSL PKI wrapper, shell calls only, no cryptography
     ├── lib/collection-verify.mjs       shared verification logic
+    ├── lib/plugin-network-scan.mjs     static scan: no self-built network channel
     ├── build-collection.mjs            verify and produce dist/
     ├── verify-collection.mjs           read-only consistency check
     ├── sign-site.mjs                   site-wide CMS signing over dist/
@@ -219,9 +249,9 @@ Counting is off for this index.
 ## How to get a plugin listed
 
 1. An organisation maintainer opens a pull request against `.github/plugins-sources.json`, one entry per plugin, with `repo`, an optional `ref`, `author` and `plugin`. Field and import rules are in [.github/plugins-sources.README.md](.github/plugins-sources.README.md).
-2. After merge, CI clones or copies the source into `temp/import/`, runs `pnpm install --frozen-lockfile` and `pnpm build`, writes `dist/meta.json` and `dist/plugin.js` into `plugins/<author>/<plugin>/<version>/`, copies `dist/plugin.js.author.sig` (and `.author.sig.<index>` for co-signers) into the version directory unchanged, copies `dist/author_pub.pem` and `author_pub.<index>.pem` into `plugins/<author>/` under the same names, then updates that plugin's `versions.json`, that author's `plugin_manifest.json` and the root `plugins.json`.
+2. After merge, CI clones or copies the source into `temp/import/`, runs `pnpm install --frozen-lockfile` and `pnpm build`, writes `dist/meta.json` and `dist/plugin.js` into `plugins/<author>/<plugin>/<version>/`, copies `dist/plugin.js.author.sig` (and `.author.sig.<index>` for co-signers) into the version directory unchanged, copies `dist/author_pub.pem` and `author_pub.<index>.pem` into `plugins/<author>/` under the same names, then updates that plugin's `versions.json`, that author's `plugin_manifest.json` and the root `plugins.json`. Before `dist/plugin.js` is copied into a version directory it goes through the static scan: a hit reports `PLUGIN_NETWORK_SELFTALK`, that plugin is skipped and no version directory is written.
 3. Add tags by hand. New index entries start with an empty `tag` array and need tags picked from `tags.json`. Undeclared tags are rejected by verification; a missing `tags.json` is an error as well and stops publication.
-4. Build and publish. CI runs `pnpm verify` (consistency check, no certificate chain involved), `pnpm build` (produce `dist/`), `scripts/sign-site.mjs` (site-wide signing with `secrets.WEB_EEC_KEY`) and `scripts/verify-site.mjs` (signature self-check), then publishes `dist/` to Pages.
+4. Build and publish. CI runs `pnpm verify` (consistency check plus the static scan of plugin artifacts, no certificate chain involved), `pnpm build` (produce `dist/`), `scripts/sign-site.mjs` (site-wide signing with `secrets.WEB_EEC_KEY`) and `scripts/verify-site.mjs` (signature self-check), then publishes `dist/` to Pages.
 
 A failing import step skips that one plugin and logs the reason; the rest still run. A failing verification, build or signing step aborts the whole build.
 
@@ -286,14 +316,14 @@ pnpm verify:site -- --root-ca root_ca.crt   # verifies the site-wide signatures 
 pnpm run import              # import plugins from the source manifest
 ```
 
-- `pnpm verify` and `pnpm build` involve no certificate and pass on an empty index.
+- `pnpm verify` and `pnpm build` involve no certificate and pass on an empty index. Both run the static scan of every version's `plugin.js` and fail on `PLUGIN_NETWORK_SELFTALK`; rules and false positives are in [static scan of plugin artifacts](#static-scan-of-plugin-artifacts).
 - The required root files are `meta.json`, `plugins.json` and `tags.json`; a missing one ends with an error, and the code for a missing `tags.json` is `TAGS_MISSING`.
 - Site-wide signing needs the web EEC private key. The key comes from `--key` or the `WEB_EEC_KEY` environment variable; the certificate comes from `--eec` or `WEB_EEC_CERT`. Both accept PEM text or a file path.
 - When the key or the certificate is missing, `sign-site.mjs` only warns and keeps an unsigned `dist/`, which suits local debugging. CI passes `--require-key` and treats the same condition as an error.
 - `verify-site.mjs` verifies the full certificate chain when `--root-ca` is given, and only checks signature integrity otherwise.
 - Use `pnpm run import`. `pnpm import` is a built-in pnpm command, not this repository's import script.
 - To produce author signatures, the import environment needs `AUTHOR_SIGN_ENABLE=true` and `AUTHOR_SIGN_PRIVATE_KEY`. The import script only forwards both to the plugin build and never reads the key content; when signing is enabled without a key it degrades to unsigned with a warning and import continues.
-- An author signature failure only produces a warning and never fails `pnpm verify` or `pnpm build`; only index structure and public key material errors block.
+- An author signature failure only produces a warning and never fails `pnpm verify` or `pnpm build`; only index structure, public key material and the static scan of plugin artifacts block.
 - OpenSSL 3.0 or newer is required locally. The scripts only call the `openssl` command line and implement no cryptography themselves.
 
 ## Security notes

@@ -2,7 +2,8 @@
 /**
  * 校验合集并生成分发内容。
  *
- * 流程: 先做合集自洽性校验(索引数据、作者公钥与作者签名),校验不通过则以非零退出码结束并列出全部问题;
+ * 流程: 先做合集自洽性校验(索引数据、作者公钥、作者签名与 plugin.js 的产物静态扫描),
+ * 校验不通过则以非零退出码结束并列出全部问题;
  * 校验通过后把根目录元数据与 plugins/ 目录复制到输出目录,并写入 build-info.json 作为分发索引。
  *
  * 本脚本不再给插件文件签 CMS: 插件文件的作者签名随产物收录,整站签名由 sign-site.mjs 在 dist/ 上生成。
@@ -179,7 +180,8 @@ function main() {
     '合集 ' + result.collectionName + ' 校验通过:' +
     result.stats.authors + ' 个作者,' +
     result.stats.plugins + ' 个插件,' +
-    result.stats.versions + ' 个版本' + signerNote + '\n',
+    result.stats.versions + ' 个版本' + signerNote +
+    ',产物静态扫描 ' + result.stats.scannedScripts + ' 个 plugin.js' + '\n',
   )
   if (warnings.length > 0) {
     process.stdout.write('警告 ' + warnings.length + ' 条:' + '\n')

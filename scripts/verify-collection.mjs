@@ -3,7 +3,8 @@
  * 合集自洽性校验,供 CI 与开发者本地使用。
  *
  * 与 build-collection.mjs 共用 lib/collection-verify.mjs 的校验逻辑,只读不写。
- * 校验范围是索引数据与作者签名,不需要证书链;整站签名由 verify-site.mjs 校验。
+ * 校验范围是索引数据、作者签名与每个版本 plugin.js 的产物静态扫描,不需要证书链;
+ * 整站签名由 verify-site.mjs 校验。
  *
  * 用法:
  *   node scripts/verify-collection.mjs --dir .
@@ -96,7 +97,8 @@ function main() {
       '合集 ' + result.collectionName + ':' +
       result.stats.authors + ' 个作者,' +
       result.stats.plugins + ' 个插件,' +
-      result.stats.versions + ' 个版本'
+      result.stats.versions + ' 个版本,' +
+      '产物静态扫描 ' + result.stats.scannedScripts + ' 个 plugin.js,命中 ' + result.stats.networkHits + ' 处'
     if (result.ok) {
       process.stdout.write('校验通过 ' + summary + ',警告 ' + result.warningCount + ' 条\n')
     } else {
