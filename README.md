@@ -78,7 +78,7 @@ awesome 侧的版本目录只剩 `plugin.js.sig` 一份合集 CMS 签名,对 `me
 信任从根证书开始,一路收到网页文件的字节。
 
 ```text
-根 CA(O=omds-chat, CN=DeepSeek-Chat-Enhanced ROOT CA;离线,root_ca.crt 由 online-data 分支分发)
+根 CA(O=omds-chat, CN=DeepSeek-Chat-Enhanced ROOT CA;离线,root_ca.crt 由 dsce 仓库的 certs 分支分发,本仓库没有该分支)
   root_ca.crt
       │  签发
       ▼
@@ -143,7 +143,7 @@ dsc 同时是插件作者,用 Ed25519 裸公钥给每个版本的 `plugin.js` �
 | 5 | `<base_url>/plugins/<author>/author_pub.pem`、`author_pub.<n>.pem` 与 `plugin.js.author.sig`、`.author.sig.<n>` | 逐位签名者校验插件作者签名,失败只警告 |
 | 6 | `<base_url>/plugins/<author>/<plugin>/<x.y.z>/plugin.js` | 取运行时脚本,已在上一步验签 |
 
-证书链的信任锚不在本仓库,而在 `online-data` 分支: 市场从 `index.json` 读取 `rootCa` 指向的 `root_ca.crt` 作为锚点,再用它校验 `dist/eec.pem`。本仓库只负责把签名数据发布到 Pages。
+证书链的信任锚不在本仓库,而在 dsce(DeepSeek-Chat-Enhanced)仓库: 根证书与公钥放在它的 `certs` 分支,信任清单放在它的 `trusted-manifest` 分支;市场按信任清单里 `rootCa` 指向的位置取到 `root_ca.crt` 作为锚点,再用它校验本仓库 Pages 上的 `dist/eec.pem`。本仓库只负责把签名数据发布到 Pages,既没有 `certs` 分支,也没有 `trusted-manifest` 分支。
 
 市场把来源类型、脚本地址、证书与签名一并缓存,本索引的来源类型记为 `inner`;证书与签名在每次预运行插件前重新校验,防止篡改。
 
@@ -331,7 +331,7 @@ pnpm run import              # 按来源清单收录插件
 - 签名不通过时插件市场会警告用户并建议重新下载,不会静默运行。
 - 收录不等于认证。签名只证明分发内容与签名者一致,不代表插件行为经过审查。
 - 私钥只放 CI secrets 与本地环境变量,不要提交。网页 EEC 私钥放在 `WEB_EEC_KEY`;作者私钥放在插件仓库侧的 `AUTHOR_SIGN_PRIVATE_KEY`,本仓库只透传给插件构建,收录、校验与整站签名都不使用它;根证书私钥永远不进本仓库,也不进 CI。`.gitignore` 已排除 `.env`。
-- 更换网页 EEC 密钥对必须同时更新 `WEB_EEC_KEY` 与 `WEB_EEC_CERT`,并同步 `online-data` 分支的 `eec.pem`;旧证书签出的 CMS 签名将无法再验证。
+- 更换网页 EEC 密钥对必须同时更新 `WEB_EEC_KEY` 与 `WEB_EEC_CERT`,并由组织在 dsce 仓库的 `certs` 分支同步 `eec.pem`(本仓库不存放该证书);旧证书签出的 CMS 签名将无法再验证。
 - 签名覆盖文件字节。换行、缩进或空白的任何改动都会让校验失败,仓库统一使用 LF,作者产物也必须是 LF。
 - 插件产物建议行压缩,既减小体积,也避免无意义的空白差异。
 

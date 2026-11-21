@@ -78,7 +78,7 @@ Both layers are needed because they answer two different questions:
 Trust starts at the root certificate and ends at the bytes of a web file.
 
 ```text
-Root CA (O=omds-chat, CN=DeepSeek-Chat-Enhanced ROOT CA; offline, root_ca.crt is distributed from the online-data branch)
+Root CA (O=omds-chat, CN=DeepSeek-Chat-Enhanced ROOT CA; offline, root_ca.crt is distributed from the certs branch of the dsce repository, which this repository does not have)
   root_ca.crt
       │  issues
       ▼
@@ -143,7 +143,7 @@ The market reads the index, fetches files and verifies signatures in this order.
 | 5 | `<base_url>/plugins/<author>/author_pub.pem`, `author_pub.<n>.pem`, `plugin.js.author.sig` and `.author.sig.<n>` | verify every author signer; failures only warn |
 | 6 | `<base_url>/plugins/<author>/<plugin>/<x.y.z>/plugin.js` | read the runtime script, verified in the previous step |
 
-The trust anchor for the chain is not in this repository but on the `online-data` branch: the market reads `rootCa` from `index.json`, fetches `root_ca.crt`, and uses it to verify `dist/eec.pem`. This repository only publishes the signed data to Pages.
+The trust anchor for the chain is not in this repository but in the dsce (DeepSeek-Chat-Enhanced) repository: the root certificate and public keys sit on its `certs` branch, and the trust manifest on its `trusted-manifest` branch. The market resolves `rootCa` in that manifest to `root_ca.crt` and uses it to verify `dist/eec.pem` on this repository's Pages site. This repository only publishes the signed data to Pages and has neither branch.
 
 The market caches the source type, script URL, certificate and signatures; this index is recorded as source type `inner`; the certificate and signatures are re-verified before every plugin run to catch tampering.
 
@@ -331,7 +331,7 @@ pnpm run import              # import plugins from the source manifest
 - When a signature fails, the market warns the user and suggests downloading again. It does not run the plugin silently.
 - Being listed is not a certification. A signature proves the content matches its signer, not that the plugin behaviour was audited.
 - Keep private keys in CI secrets and local environment variables, never in the repository. The web EEC key lives in `WEB_EEC_KEY`; the author key lives in `AUTHOR_SIGN_PRIVATE_KEY` on the plugin repository side and this repository only forwards it to the plugin build, never using it for import, verification or site-wide signing; the root private key never enters this repository and never enters CI. `.gitignore` already excludes `.env`.
-- Rotating the web EEC key pair means updating both `WEB_EEC_KEY` and `WEB_EEC_CERT` and syncing `eec.pem` on the `online-data` branch; CMS signatures made with the old certificate can no longer be verified.
+- Rotating the web EEC key pair means updating both `WEB_EEC_KEY` and `WEB_EEC_CERT` and having the organization sync `eec.pem` on the `certs` branch of the dsce repository (this repository does not hold that certificate); CMS signatures made with the old certificate can no longer be verified.
 - Signatures cover file bytes. Any change to line endings, indentation or whitespace breaks verification, and the repository uses LF everywhere. Author artifacts must be LF too.
 - Minify plugin artifacts. It reduces size and removes meaningless whitespace differences.
 

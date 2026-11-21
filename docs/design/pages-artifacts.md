@@ -87,7 +87,7 @@
 - 自检两个方向都查: 清单列出的文件必须存在且签名通过,目录内的签名目标必须都出现在清单里([verify-site.mjs:149](../../scripts/verify-site.mjs) 至 [verify-site.mjs:166](../../scripts/verify-site.mjs))。
 - 孤儿签名在签名前清理,只清 `<文件>.sig`,跳过作者签名([sign-site.mjs:192](../../scripts/sign-site.mjs) 至 [sign-site.mjs:199](../../scripts/sign-site.mjs))。这条跳过规则是作者签名层与整站签名层唯一会互相看见的地方。
 
-`eec.pem` 不在覆盖面内是刻意的: 它由市场直接读取并验到根证书,而根证书不在本仓库,在 `online-data` 分支由 `index.json` 的 `rootCa` 指向。本仓库只发布签名数据,信任锚不随本仓库发布。
+`eec.pem` 不在覆盖面内是刻意的: 它由市场直接读取并验到根证书,而根证书不在本仓库: 证书与公钥放在 dsce 仓库的 `certs` 分支,信任清单放在 dsce 仓库的 `trusted-manifest` 分支,清单里的 `rootCa` 指向根证书。本仓库只发布签名数据,信任锚不随本仓库发布。
 
 ## 五、宿主通道与统计清单的分界
 

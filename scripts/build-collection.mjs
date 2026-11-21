@@ -7,7 +7,7 @@
  * 校验通过后把根目录元数据与 plugins/ 目录复制到输出目录,并写入 build-info.json 作为分发索引。
  *
  * 本脚本不再给插件文件签 CMS: 插件文件的作者签名随产物收录,整站签名由 sign-site.mjs 在 dist/ 上生成。
- * 根证书不进 dist,由 online-data 分支分发。
+ * 根证书不进 dist,由 dsce 仓库的 certs 分支分发(本仓库没有该分支)。
  *
  * 用法:
  *   node scripts/build-collection.mjs --dir . --out dist
