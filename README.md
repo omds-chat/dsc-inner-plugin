@@ -233,7 +233,15 @@ dsc-inner-plugin/
 
 构建产物 `dist/` 复制根目录的 `meta.json`、`plugins.json`、`tags.json` 与 `plugins/`,并写出 `build-info.json` 作为分发索引;签名阶段再追加 `eec.pem`、每个被签名文件的 `.sig`、`web_files.json` 与 `web_files.json.sig`。
 
+部署出去的 Pages 站点就是 `dist/` 的原样发布,完整站点树与每个节点的来源见 [发布产物说明](docs/design/pages-artifacts.md)的「Pages 环境文件结构」一节,本节不重复。
+
 目录命名与必需文件见 [plugins/README.md](plugins/README.md)。
+
+## 分支结构
+
+本仓只有 `main` 一条分支。`main` 的顶层布局一句话: 根目录放索引数据(`meta.json`、`plugins.json`、`tags.json`)与收录目标 `plugins/`,`scripts/` 放构建、收录与签名脚本,`.github/` 放收录来源清单与发布流水线,`docs/` 放文档;`dist/`、`temp/` 是构建与收录的产物,只存在于构建环境,不进版本库。
+
+组织主线仓库 dsce(DeepSeek-Chat-Enhanced)的归档分支机制(`dist-history`、`certs`、`trusted-manifest` 三条分支的 `version/` 释放合并,组织级口径见组织仓库的 `.github/docs/repo-spec/side-branches.md`,各仓落地口径见该仓的 `docs/design/side-branches.md`)不适用于本仓: 本仓没有归档分支,站点上没有 `version/<tag>/` 快照,插件版本历史由 `plugins/<author>/<plugin>/versions.json` 与各版本目录在 `main` 上直接承载。按组织规范检出并行分支工作树的 `single-branch/` 目录在本仓为空,正是没有并行分支的体现。
 
 ## 索引元数据
 

@@ -1,6 +1,6 @@
 # Pages 发布内容职责
 
-> 面向本仓库的维护者与接手者。本文只回答一件事: `dist/` 里的每份产物由谁生成、由谁读取、是否进入整站签名、体积随什么增长。机制与信任边界见 [收录与作者签名](collection-and-author-signing.md),索引目录规范见 [plugins/README.md](../../plugins/README.md),操作步骤见根目录 [README](../../README.md)。
+> 面向本仓库的维护者与接手者。本文回答两件事: `dist/` 里的每份产物由谁生成、由谁读取、是否进入整站签名、体积随什么增长;以及这些产物部署出去之后,Pages 站点整体长什么样、分支上是什么形态。机制与信任边界见 [收录与作者签名](collection-and-author-signing.md),索引目录规范见 [plugins/README.md](../../plugins/README.md),操作步骤见根目录 [README](../../README.md)。
 
 ## 一、判定口径
 
@@ -27,7 +27,46 @@
 - 签名文件与源文件大小无关。整站签名是 CMS 分离签名,固定 `-binary -md sha512 -outform DER -nocerts -noattr`([pki.mjs:365](../../scripts/pki.mjs)),单份只有签名值与算法标识;作者签名是 Ed25519 裸公钥签名([pki.mjs:442](../../scripts/pki.mjs)),长度同样与被签消息无关。
 - 索引类 JSON 的体积由条目数决定,与文件内容长度无关。
 
-## 二、面向宿主侧
+## 二、Pages 环境文件结构
+
+部署出去的站点就是 `dist/` 的原样发布,没有任何再组装: CI 在签名自检通过后把 `dist/` 整目录上传为 Pages 产物([build-and-deploy.yml:144](../../.github/workflows/build-and-deploy.yml) 至 [build-and-deploy.yml:146](../../.github/workflows/build-and-deploy.yml) 的 `path: dist`),再由部署步骤原样上线([build-and-deploy.yml:159](../../.github/workflows/build-and-deploy.yml))。站点根没有 `certs/`,没有 `index.json`,没有版本快照目录: `dist/` 里有什么,站点上就是什么。
+
+入口地址是 GitHub Pages 项目站点根,形如 `https://omds-chat.github.io/dsc-inner-plugin/`,即 [README.md](../../README.md) 市场校验表里的 `<base_url>`。站点根没有 `index.html`,没有面向浏览器的首页;每个路径都是市场与校验脚本按固定顺序直接取用的数据文件。
+
+```text
+<base_url>/                 站点根,即 dist/ 的原样发布
+├── eec.pem                 签名材料: 网页 EEC 证书副本,签名阶段复制(sign-site.mjs:215)
+├── web_files.json          清单: 签名阶段生成,列出全部被整站签名的文件(sign-site.mjs:211)
+├── web_files.json.sig      签名文件: 清单自身的 CMS 分离签名(sign-site.mjs:212)
+├── meta.json               索引: 人写,构建原样复制(build-collection.mjs:22)
+├── plugins.json            索引: 收录脚本维护条目,构建原样复制(build-collection.mjs:22)
+├── tags.json               索引: 人写标签词表,构建原样复制(build-collection.mjs:22)
+├── build-info.json         构建产物: 构建阶段汇总写出,宿主不读(build-collection.mjs:139)
+├── plugins/                构建产物: 构建阶段整树复制(build-collection.mjs:131)
+│   ├── README.md           人写说明,不参与整站签名(.md 不在覆盖面)
+│   ├── author_manifest.json  索引: 收录脚本登记(import-plugins.mjs:288)
+│   └── <author>/
+│       ├── plugin_manifest.json  索引: 收录脚本维护(import-plugins.mjs:256)
+│       ├── author_pub.pem         签名材料: 第 1 位签名者的 Ed25519 公钥,收录复制(import-plugins.mjs:409)
+│       ├── author_pub.<n>.pem     签名材料: 第 n 位签名者的公钥,可选
+│       └── <plugin>/
+│           ├── versions.json      索引: 收录脚本维护(import-plugins.mjs:246)
+│           └── <x.y.z>/
+│               ├── meta.json      插件构建产物: 插件仓库构建,收录原样复制(import-plugins.mjs:393)
+│               ├── plugin.js      插件构建产物: 运行时脚本,受整站签名与作者签名双重覆盖(import-plugins.mjs:394)
+│               └── plugin.js.author.sig(.<n>)  签名材料: 作者 Ed25519 分离签名,不参与整站签名(import-plugins.mjs:403)
+└── <文件>.sig               签名文件: 每个被整站签名的 .html/.js/.css/.json 各一份(sign-site.mjs:206)
+```
+
+树按完整收录后的形态画: 作者公钥与作者签名只在收录到该产物时存在,收录脚本缺作者签名时只警告不补文件;树的节点标注与第三、四、五、六节的逐文件表格一一对应。
+
+### 版本化路径的存在形态
+
+本仓没有组织主线仓库 dsce 的归档分支机制。dsce 的发布流水线把 `dist-history`、`certs`、`trusted-manifest` 三条归档分支的 `version/` 释放合并进页面包,站点上的 `version/<tag>/` 是该版本完整快照(构建产物、`certs/`、`index.json`);本仓没有归档分支,站点上没有 `version/<tag>/`,没有站点级历史快照,插件收录直接落到当前路径,不经过版本快照。
+
+站点上唯一的版本维度是插件版本目录 `plugins/<author>/<plugin>/<x.y.z>/`: 一个版本目录就是该插件一个版本的完整快照(运行时脚本、版本元数据、作者签名),历史版本随收录在 `main` 上累积,收录脚本不清理既有版本目录;插件有哪些历史版本由同目录的 `versions.json` 声明。证书与信任清单不随本仓发布: 根证书与信任清单分别放在 dsce 仓库的 `certs` 分支与 `trusted-manifest` 分支,见 [README.md:147](../../README.md)。
+
+## 三、面向宿主侧
 
 这一组是市场与引擎按既有读取顺序直接取用的文件。读取顺序见 [README.md:136](../../README.md) 起的市场校验表: 证书与签名在前,索引数据在中,运行时脚本在最后。
 
@@ -44,10 +83,10 @@
 三点补充:
 
 - 根 `meta.json` 与版本 `meta.json` 同名不同职。前者是索引级开关(下载计数),由本仓库维护;后者是单版本插件元数据,只能来自插件仓库的构建产物。二者在 `dist/` 里层级不同,但同名,读文件时看路径不看文件名。
-- 在插件目录这一层,作者公钥与作者签名是「宿主读取却不参与整站签名」的一组(同类还有 `eec.pem`,见第四节)。它们的锚点在自身([collection-and-author-signing.md 第 9.4 节](collection-and-author-signing.md)记录了这一状态未定稿)。
+- 在插件目录这一层,作者公钥与作者签名是「宿主读取却不参与整站签名」的一组(同类还有 `eec.pem`,见第五节)。它们的锚点在自身([collection-and-author-signing.md 第 9.4 节](collection-and-author-signing.md)记录了这一状态未定稿)。
 - `plugin.js` 被两层覆盖: 字节由整站签名固定,归属由作者签名回答。两层都不通过时,前者阻断发布,后者只警告。
 
-## 三、面向第三方工具与作者自查
+## 四、面向第三方工具与作者自查
 
 这一组是给人和工具看的索引与统计,不是宿主安装通道。它们参与整站签名,是因为扩展名落在覆盖面内,而不是因为宿主会读。
 
@@ -70,7 +109,7 @@
 
 它是唯一一份「把索引数据再抄一遍」的产物: 同样的信息已经分别存在于 `plugins.json` 与 `versions.json`,而这两份才是宿主读取的那一份。它没有 schema 版本号,也没有任何校验脚本读取它,因此不能作为对外契约使用。
 
-## 四、面向站点自身
+## 五、面向站点自身
 
 这一组回答「这份页面是不是本组织发布的」。它们不由构建阶段产出,而是签名阶段在已定型的 `dist/` 上就地生成。
 
@@ -89,7 +128,7 @@
 
 `eec.pem` 不在覆盖面内是刻意的: 它由市场直接读取并验到根证书,而根证书不在本仓库: 证书与公钥放在 dsce 仓库的 `certs` 分支,信任清单放在 dsce 仓库的 `trusted-manifest` 分支,清单里的 `rootCa` 指向根证书。本仓库只发布签名数据,信任锚不随本仓库发布。
 
-## 五、宿主通道与统计清单的分界
+## 六、宿主通道与统计清单的分界
 
 一句话分界: 宿主读的东西决定「装什么」,统计清单只描述「装了多少」。
 
@@ -105,7 +144,7 @@
 - `author_manifest.json` 与 `plugin_manifest.json` 是索引自洽的中间材料,自洽性校验读它们,宿主不需要: 市场从 `plugins/<作者>/` 的目录结构和 `versions.json` 就能定位文件。
 - 统计清单与统计口径一旦被当作宿主契约,就不能再自由增删字段。保持「不是通道」这一点,等于保住了改动它们时不必兼容旧版本的自由。
 
-## 六、当前体量与覆盖实测
+## 七、当前体量与覆盖实测
 
 以下数字取自当前工作区的只读盘点,用于给出量级,不是规格:
 
@@ -120,7 +159,7 @@
 
 本索引当前没有收录任何插件,所以体积只能给出基数。插件的增长路径是确定的: 每收录一个版本,`versions.json` 加一条、`build-info.json` 的 `versions` 数组加一项、`web_files.json` 加两行(`meta.json` 与 `plugin.js`)、逐文件签名加两份;每收录一个插件,`plugins.json` 加一条、`build-info.json` 加一个对象、`plugin_manifest.json` 加一项。
 
-## 七、未对齐之处
+## 八、未对齐之处
 
 以下五项是盘点中发现的口径不一致,本文只记录,不改代码与产物。
 
@@ -132,7 +171,7 @@
 | `build-info.json` 无 schema 版本 | 只有四个顶层字段,无版本号 | 若将来给宿主读,接口已无版本位可扩展 |
 | `eec.pem` 不进清单 | 扩展名在覆盖面外 | 清单只记路径不记证书指纹;证书轮换后清单内容不变,无法从清单看出是哪张证书签的 |
 
-## 八、相关文件
+## 九、相关文件
 
 | 文件 | 与本篇的关系 |
 |:---:|:---:|
