@@ -44,7 +44,8 @@ const BUILD_TIMEOUT_MS = Number(process.env.IMPORT_BUILD_TIMEOUT_MS || 900000)
 const IS_WINDOWS = process.platform === 'win32'
 const COPY_SKIP = new Set(['node_modules', '.git', 'dist', 'temp'])
 
-const AUTHOR_PATTERN = /^[a-z0-9][a-z0-9-]*$/
+// 作者目录名允许大小写字母、数字与连字符,不得以连字符开头;判定是否同一作者名时大小写不敏感,见 caseConflictingAuthor
+const AUTHOR_PATTERN = /^[A-Za-z0-9][A-Za-z0-9-]*$/
 const PLUGIN_PATTERN = /^(?:dsc-[a-z0-9][a-z0-9._-]*|@[a-z0-9][a-z0-9._-]*\/dsc-[a-z0-9][a-z0-9._-]*)$/
 const VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 const URL_PATTERN = /^https?:\/\/\S+$/i
@@ -314,6 +315,28 @@ function planPluginsIndex(plugin, author) {
   return { path, value: next }
 }
 
+/**
+ * 作者名判定大小写不敏感: 两个作者目录仅大小写不同视为同一名称,按重复处理。
+ * 收录时若与既有作者目录或已登记 username 仅大小写不同,返回既有写法,由调用方按重复拒绝,
+ * 要求维护者沿用已登记的写法,避免同一作者出现两个只差大小写的目录。
+ */
+function caseConflictingAuthor(author) {
+  const lower = author.toLowerCase()
+  const pluginsDir = join(ROOT_DIR, 'plugins')
+  for (const name of existsSync(pluginsDir) ? readdirSync(pluginsDir) : []) {
+    if (name !== author && name.toLowerCase() === lower) return name
+  }
+  const manifestPath = join(pluginsDir, 'author_manifest.json')
+  if (!existsSync(manifestPath)) return null
+  const manifest = readJson(manifestPath, 'author_manifest.json')
+  if (!Array.isArray(manifest)) return null
+  for (const entry of manifest) {
+    const username = isObject(entry) && typeof entry.username === 'string' ? entry.username : ''
+    if (username !== author && username.toLowerCase() === lower) return username
+  }
+  return null
+}
+
 function planAuthorManifest(author, profile) {
   const path = join(ROOT_DIR, 'plugins', 'author_manifest.json')
   const current = existsSync(path) ? readJson(path, 'author_manifest.json') : []
@@ -321,7 +344,7 @@ function planAuthorManifest(author, profile) {
   const next = []
   let replaced = false
   for (const entry of current) {
-    if (isObject(entry) && entry.username === author) {
+    if (isObject(entry) && typeof entry.username === 'string' && entry.username.toLowerCase() === author.toLowerCase()) {
       replaced = true
       next.push({ username: author, profile })
       continue
@@ -402,6 +425,11 @@ function collectAuthorArtifacts(distDir) {
 
 async function importOne(item, label, options) {
   const { author, plugin, profile } = validateItem(item, label)
+  const conflicting = caseConflictingAuthor(author)
+  if (conflicting) {
+    throw new Error('作者名 ' + JSON.stringify(author) + ' 与既有写法 ' + JSON.stringify(conflicting)
+      + ' 仅大小写不同,判定为同一名称,按重复拒绝;请沿用已登记的写法')
+  }
   const dirName = plugin.split('/').pop()
   const authorDir = join(ROOT_DIR, 'plugins', author)
   const pluginDir = join(authorDir, dirName)

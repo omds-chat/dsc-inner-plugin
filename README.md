@@ -274,7 +274,7 @@ dsc-inner-plugin/
 3. 组织维护者从 `tags.json` 挑标签补进 `plugins.json`;未在 `tags.json` 声明的标签会被校验拒绝,`tags.json` 缺失也会让校验与构建中止。
 4. CI 校验并签名:`pnpm verify` 通过后 `pnpm build` 生成 `dist/`,再用 `scripts/sign-site.mjs` 做整站签名,最后由 `scripts/verify-site.mjs` 自检,全部通过才发布 Pages。
 
-目录与清单不手写。产物就位前把条目写进 `plugins.json` 会让校验失败,因为每个条目都要求完整的版本目录;作者公钥与作者签名也只在产物存在时才有,索引里不生成。当前 `dsc-humanize` 只建到作者目录与作者清单,`plugins.json` 仍为空,产物与签名都没有进入本仓库。规则与占位说明见 [plugins/README.md](plugins/README.md)。
+目录与清单不手写。产物就位前把条目写进 `plugins.json` 会让校验失败,因为每个条目都要求完整的版本目录;作者公钥与作者签名也只在产物存在时才有,索引里不生成。当前作者目录 `plugins/omds-chat/` 已建好,`plugin_manifest.json` 与 `plugins.json` 均为空数组,产物与签名都没有进入本仓库。目录规范见 [plugins/README.md](plugins/README.md)。
 
 ## 预设标签
 

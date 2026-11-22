@@ -23,6 +23,10 @@
  * 每个版本的 plugin.js 还要过一道产物静态扫描:插件不得自建网络通道,命中报
  * PLUGIN_NETWORK_SELFTALK (见 plugin-network-scan.mjs)。与作者签名一样只记警告、不阻断发布,
  * 全组织口径一致:命中是「需要人工复核」的信号,不是结构错误。
+ *
+ * 作者名判定大小写不敏感:两个作者目录仅大小写不同视为同一名称,按重复处理,
+ * 报 AUTHOR_DIR_DUPLICATE 错误阻断发布;author_manifest.json 里同一作者的重复登记
+ * (含仅大小写不同)也按重复检出,报 AUTHOR_MANIFEST_DUPLICATE 警告。
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
@@ -238,7 +242,8 @@ export function verifyCollection(collectionDir, options = {}) {
 
   // 五、作者清单
   const authorManifestPath = join(root, 'plugins', 'author_manifest.json')
-  const registeredAuthors = new Set()
+  /** 已登记作者,键为 username 的小写形式(作者名判定大小写不敏感),值为首次登记的原文写法 */
+  const registeredAuthors = new Map()
   if (!isFile(authorManifestPath)) {
     report.error('AUTHOR_MANIFEST_MISSING', 'plugins/author_manifest.json 不存在', 'plugins/author_manifest.json')
   } else {
@@ -256,12 +261,42 @@ export function verifyCollection(collectionDir, options = {}) {
           if (typeof item.profile !== 'string' || item.profile.length === 0) {
             report.error('AUTHOR_MANIFEST_INVALID', label + ' 缺少合法的 profile', 'plugins/author_manifest.json')
           }
-          if (registeredAuthors.has(item.username)) {
-            report.warn('AUTHOR_MANIFEST_DUPLICATE', '作者 ' + item.username + ' 在 author_manifest.json 中重复登记', 'plugins/author_manifest.json')
+          // 作者名大小写不敏感:仅大小写不同的两条 username 也判为重复登记
+          const lower = item.username.toLowerCase()
+          if (registeredAuthors.has(lower)) {
+            report.warn(
+              'AUTHOR_MANIFEST_DUPLICATE',
+              '作者 ' + item.username + ' 与 ' + registeredAuthors.get(lower)
+                + ' 仅大小写不同或完全相同,在 author_manifest.json 中重复登记',
+              'plugins/author_manifest.json',
+            )
+          } else {
+            registeredAuthors.set(lower, item.username)
           }
-          registeredAuthors.add(item.username)
         }
       }
+    }
+  }
+
+  // 五点五、作者目录大小写查重:作者名判定大小写不敏感,两个作者目录仅大小写不同
+  // 视为同一名称,按重复拒绝。既有作者的目录只有一份,出现仅大小写不同的第二个目录
+  // 属于索引结构错误,报 AUTHOR_DIR_DUPLICATE 阻断发布。
+  const pluginsRoot = join(root, 'plugins')
+  if (isDirectory(pluginsRoot)) {
+    const seenAuthorDirs = new Map()
+    for (const name of readdirSync(pluginsRoot).sort()) {
+      if (!isDirectory(join(pluginsRoot, name))) continue
+      const lower = name.toLowerCase()
+      if (seenAuthorDirs.has(lower)) {
+        report.error(
+          'AUTHOR_DIR_DUPLICATE',
+          '作者目录 ' + name + ' 与 ' + seenAuthorDirs.get(lower)
+            + ' 仅大小写不同,作者名判定大小写不敏感,判为同一名称,按重复拒绝',
+          'plugins/' + name,
+        )
+        continue
+      }
+      seenAuthorDirs.set(lower, name)
     }
   }
 
@@ -269,7 +304,7 @@ export function verifyCollection(collectionDir, options = {}) {
   const authorCache = new Map()
   for (const entry of entries) {
     const author = entry.author
-    if (!registeredAuthors.has(author)) {
+    if (!registeredAuthors.has(author.toLowerCase())) {
       report.warn('AUTHOR_NOT_REGISTERED', '作者 ' + author + ' 未在 plugins/author_manifest.json 中登记', 'plugins/author_manifest.json')
     }
     if (!authorCache.has(author)) {

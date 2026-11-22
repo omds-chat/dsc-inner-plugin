@@ -14,7 +14,7 @@
 | `plugin` | string | 是 | 插件名,即 `meta.json` 的 `name` |
 | `profile` | string | 否 | 作者主页链接。给出时会一并登记到 `plugins/author_manifest.json` |
 
-`author` 仅允许小写字母、数字、连字符,不得以连字符开头或结尾。`plugin` 必须匹配 `dsc-xxx` 或 `@scope/dsc-xxx`。
+`author` 仅允许大小写字母、数字、连字符,不得以连字符开头(以 `scripts/import-plugins.mjs` 的 `AUTHOR_PATTERN` 为准)。作者名判定大小写不敏感: 与既有作者目录或已登记作者仅大小写不同的写法视为同一名称,收录按重复拒绝,请沿用已登记的写法。`plugin` 必须匹配 `dsc-xxx` 或 `@scope/dsc-xxx`。
 
 ## 示例
 

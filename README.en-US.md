@@ -274,7 +274,7 @@ Step by step, for one pull request:
 3. The maintainer adds tags picked from `tags.json` to `plugins.json`; tags not declared there are rejected by verification, and a missing `tags.json` also stops verification and the build.
 4. CI verifies and signs: `pnpm verify` must pass, `pnpm build` produces `dist/`, `scripts/sign-site.mjs` signs the whole site, and `scripts/verify-site.mjs` checks the result before Pages is published.
 
-Directories and manifests are never written by hand. Adding an entry to `plugins.json` before the artifact exists makes verification fail, because every entry requires a complete version directory; the author public key and author signatures exist only when the artifact provides them, and the index never generates them. `dsc-humanize` is currently built only up to the author directory and the author manifest, `plugins.json` is still empty, and neither artifacts nor signatures have entered this repository. Rules and placeholder notes are in [plugins/README.md](plugins/README.md).
+Directories and manifests are never written by hand. Adding an entry to `plugins.json` before the artifact exists makes verification fail, because every entry requires a complete version directory; the author public key and author signatures exist only when the artifact provides them, and the index never generates them. The author directory `plugins/omds-chat/` is in place, `plugin_manifest.json` and `plugins.json` are both empty arrays, and neither artifacts nor signatures have entered this repository. The directory conventions are in [plugins/README.md](plugins/README.md).
 
 ## Preset tags
 

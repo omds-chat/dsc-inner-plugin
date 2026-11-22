@@ -4,54 +4,23 @@
 
 本索引只收录从 DeepSeek-Chat-Enhanced 本体解耦出来的可选内部插件。条目由收录流程写入,不手工编辑;未收录插件时,`plugins.json` 为空,`plugins/` 下只有本文件、`author_manifest.json` 与已登记的作者目录。
 
-## 作者目录
+## 增量声明
 
-`plugins/<author>/`
+「作者 / 插件 / 版本」三层布局的目录结构条文以合集模板仓 dsc-plugin-set-template 的 `template/plugins/README.md` 为权威出处。该仓库与本仓同为组织工作区内的并列仓库,只读参考,本文不给链接。本文只写本仓增量: 作者名的收录口径、版本 `meta.json` 的校验口径、作者多签命名、产物静态扫描与收录流程。
 
-- 目录名即作者英文名称,必须与 `plugins.json` 的 `author`、`plugins/author_manifest.json` 的 `username` 完全一致。
-- 仅允许小写字母、数字、连字符,不得以连字符开头或结尾,最长 39 字符。
-- 作者目录内有两类文件:
-  - `plugin_manifest.json`:该作者的插件名数组,例如 `["dsc-demo"]`,必需。
-  - `author_pub.pem`、`author_pub.<n>.pem`:作者公钥,OpenSSL PEM,Ed25519。序号与作者的签名者一一对应,`author_pub.pem` 是第 1 位签名者。
+## 作者名的收录口径
 
-作者公钥由插件构建产物 `dist/author_pub.pem`(多签再加 `dist/author_pub.<n>.pem`)随收录流程复制进来,不要在索引里手工生成。缺失时校验只给警告,该作者的插件便不能带作者签名。
+作者目录名即作者英文名称,与 `plugins.json` 的 `author`、`plugins/author_manifest.json` 的 `username` 一致,目录写作 `plugins/<author>/`。本仓增量口径:
 
-本索引的作者是 omds-chat 组织自身,作者目录为 `omds-chat`。该目录已建好,`plugin_manifest.json` 先登记待收录的 `dsc-humanize`;产物未就位时,插件目录里只有一份说明,不写 `versions.json` 与版本目录。
+- 目录名仅允许大小写字母、数字、连字符,不得以连字符开头,以收录脚本 `scripts/import-plugins.mjs` 的 `AUTHOR_PATTERN`(`^[A-Za-z0-9][A-Za-z0-9-]*$`)为准。
+- 作者名判定大小写不敏感: 两个作者目录仅大小写不同视为同一名称,按重复处理。收录时与既有作者目录或已登记作者仅大小写不同的写法直接拒绝,要求沿用已登记的写法;校验时发现仅大小写不同的两个作者目录报 `AUTHOR_DIR_DUPLICATE` 错误,阻断发布。
+- 作者目录内的作者公钥按签名者序号配对,配对规则见下文「作者多签命名」。
 
-## 插件目录
+## meta.json 的校验口径
 
-`plugins/<author>/<plugin>/`
+本仓校验对版本目录内的 `meta.json` 只强制两个字段: `name` 必须与 `plugins.json` 的 `plugin_name` 一致,`version` 必须与版本目录名一致;其余字段服务于插件运行时与市场展示,索引校验不检查它们。字段全集与取值规则见权威出处与模板仓的插件开发规范(`specs/plugin-develop-spec.md`)。
 
-- 目录名取插件 npm 包名去掉命名空间前缀:`dsc-demo` 写作 `dsc-demo`,`@omds-chat/dsc-demo` 同样写作 `dsc-demo`。
-- 插件名必须匹配 `dsc-xxx` 或 `@scope/dsc-xxx`,仅允许小写字母、数字、点、下划线、连字符。
-- 插件目录内必需 `versions.json`:
-
-```json
-{
-  "latest": "1.0.0",
-  "versions": ["1.0.0", "0.9.0"]
-}
-```
-
-- `latest` 必须出现在 `versions` 内;`versions` 按版本号降序排列且不得重复。
-- 尚未收录的插件目录是唯一例外:只放说明,由收录脚本在建版本目录时一并写出 `versions.json`,避免预先编造版本号。
-
-## 版本目录
-
-`plugins/<author>/<plugin>/<x.y.z>/`
-
-| 文件 | 必需 | 签名者 | 说明 |
-|:---:|:---:|:---:|:---:|
-| `meta.json` | 是 | 无 | 插件运行时元数据,字段见下表 |
-| `plugin.js` | 是 | 无 | 插件运行时脚本,单文件 ESM,使用 LF 换行;不得出现自行发起网络的写法,见下文「产物静态扫描」 |
-| `plugin.js.author.sig` | 否 | 插件作者 | 第 1 位签名者对 `plugin.js` 的裸公钥分离签名,随插件产物提供 |
-| `plugin.js.author.sig.<n>` | 否 | 共同签名者 | 第 n 位签名者对 `plugin.js` 的裸公钥分离签名,序号从 2 起 |
-
-版本目录内只有作者签名,没有 `meta.json.sig` 与 `plugin.js.sig`:插件文件的整站签名在 `dist/` 里生成,由 `scripts/sign-site.mjs` 为每个 `.html/.js/.css/.json` 文件写出 `<文件>.sig`,因此 `dist/plugins/.../plugin.js.sig` 由签名阶段产出,不进入源码目录。
-
-作者签名只覆盖 `plugin.js`:对 `meta.json` 的作者签名已取消,`meta.json` 由整站签名与索引数据覆盖。旧产物里遗留的 `meta.json.author.sig` 一律忽略,既不复制进来,也不报错。
-
-### 作者多签命名
+## 作者多签命名
 
 同一位作者可以有多个签名者。签名文件与公钥按序号配对,序号 1 沿用既有文件名:
 
@@ -78,25 +47,11 @@
 
 签名都是对文件原始字节的签名,不做换行规范化。任何一字节差异(包括 LF 与 CRLF 的差别)都会让校验失败。
 
-### 产物静态扫描
+## 产物静态扫描
 
 每个版本的 `plugin.js` 都要过产物静态扫描: 插件不得自建网络通道,产物里不得出现 `fetch(`、`XMLHttpRequest(`、`WebSocket(`、`EventSource(`、`navigator.sendBeacon(` 与远程地址的 `import(`。命中报 `PLUGIN_NETWORK_SELFTALK` 警告: 收录照常写出该版本目录,`pnpm verify` 与 `pnpm build` 照常通过,退出码仍为 0。
 
 扫描只认全局对象上的直接调用,规则、误伤与盲区见根目录 [README](../README.md#产物静态扫描)。它与作者签名同一口径: 两者都只警告、不阻断,是否收录由维护者复核判断。
-
-`meta.json` 的必填字段:
-
-| 字段 | 类型 | 说明 |
-|:---:|:---:|:---:|
-| `name` | string | 插件名,与 `plugins.json` 的 `plugin_name` 一致 |
-| `version` | string | 三段语义化版本号,与目录名一致 |
-| `license` | string | SPDX 标识符,例如 MIT |
-| `description` | object | 至少包含 `zh-CN` 或 `en-US` 之一 |
-| `author` | string | 作者名 |
-| `repo_link` | string | 源码仓库链接 |
-| `dependencies` | object | 仅允许 `dsc` 一个键,值为 semver range |
-
-本仓库的校验只强制 `name` 与 `version`:前者必须与 `plugins.json` 的 `plugin_name` 一致,后者必须与版本目录名一致。其余字段服务于插件运行时与市场展示,索引校验不检查它们。
 
 ## 新增内部插件的步骤
 
@@ -115,23 +70,4 @@
 - 整站签名:由本仓库 CI 的 `scripts/sign-site.mjs` 完成,需要 `secrets.DSC_INNER_PLUGIN_EEC_SECRET` 与 `secrets.DSC_INNER_PLUGIN_EEC`,覆盖 `dist/` 内全部 `.html`、`.js`、`.css`、`.json`。签名只落在 `dist/`,`plugins/` 源码目录不出现整站签名文件。
 - 校验:索引结构与公钥材料的错误在 CI 侧阻断发布,标签不在根目录 `tags.json` 词表内同样阻断;作者签名的校验结果一律只记警告,逐位签名者给出结论,不阻断发布,与插件市场侧口径一致。
 
-当前状态:作者目录 `plugins/omds-chat/` 与作者清单已按本规范建好,`plugin_manifest.json` 登记 `dsc-humanize`;`plugins.json` 仍为空,因为条目要求完整版本目录,产物未就位时写入会直接让校验失败。
-
-## 目录示例
-
-```text
-plugins/
-  omds-chat/
-    author_pub.pem
-    author_pub.2.pem
-    plugin_manifest.json
-    dsc-demo/
-      versions.json
-      1.0.0/
-        meta.json
-        plugin.js
-        plugin.js.author.sig
-        plugin.js.author.sig.2
-```
-
-源码目录不含证书:根目录只有 `meta.json`、`plugins.json`、`tags.json` 三个索引文件,含义见根目录 [README](../README.md)。三者都是必需文件:缺 `tags.json` 时报 `TAGS_MISSING` 错误,校验与构建一并中止,因为缺词表会让标签校验整段失效。网页 EEC 证书只在签名阶段进入 `dist/`,不进入源码仓库。
+当前状态: 作者目录 `plugins/omds-chat/` 与 `plugins/author_manifest.json` 已建好;`plugin_manifest.json` 与 `plugins.json` 均为空数组,首个内部插件的产物与签名尚未进入本仓库。
