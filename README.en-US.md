@@ -49,7 +49,7 @@ A plugin is listed only when every point below holds:
 
 - It is built and maintained by omds-chat, with no third-party submissions.
 - It is decoupled from the DeepSeek-Chat-Enhanced codebase: it can be installed and disabled on its own, without coordinated changes in that product itself.
-- It commits to never collecting or leaking user credentials and data, never opens a network channel of its own, and never reads conversation content unrelated to its own purpose. This one is machine-checked by the [static scan of plugin artifacts](#static-scan-of-plugin-artifacts): a hit only warns and does not block the import.
+- It commits to never collecting or leaking user credentials and data, never opens a network channel of its own (that is, never connects directly through global fetch, XMLHttpRequest and the like; fetching through a capability the host provides, such as asset reads, is not counted, and the protocol, size and timeout of that channel are constrained by the host), and never reads conversation content unrelated to its own purpose. This one is machine-checked by the [static scan of plugin artifacts](#static-scan-of-plugin-artifacts): a hit only warns and does not block the import.
 - Its artifact is a single browser ESM script that exports `activate(context)` and depends on neither Node built-ins nor a backend API.
 - It comes with a buildable source repository, so `pnpm build` can reproduce the artifact in CI.
 - Its runtime metadata `meta.json` is complete and its plugin name matches `dsc-xxx` or `@scope/dsc-xxx`.
